@@ -1,0 +1,46 @@
+# Code Owners for EasyTuner
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+# Will be requested for review when someone opens a pull request
+* @easytuner-team/engineering-leads
+
+# Server code
+/server/ @easytuner-team/backend-team
+/server/app/detection/ @easytuner-team/backend-team @easytuner-team/ml-team
+/server/app/auth/ @easytuner-team/backend-team @easytuner-team/security-team
+/server/alembic/ @easytuner-team/backend-team @easytuner-team/database-team
+
+# Client code
+/client/ @easytuner-team/frontend-team
+/client/src/components/hex-viewer/ @easytuner-team/frontend-team @easytuner-team/visualization-team
+/client/src/features/auth/ @easytuner-team/frontend-team @easytuner-team/security-team
+
+# Infrastructure and DevOps
+/.github/ @easytuner-team/devops-team
+/docker-compose.yml @easytuner-team/devops-team
+/k8s/ @easytuner-team/devops-team
+/monitoring/ @easytuner-team/devops-team
+
+# Documentation
+/docs/ @easytuner-team/documentation-team
+README.md @easytuner-team/documentation-team
+CONTRIBUTING.md @easytuner-team/documentation-team
+
+# Security-sensitive files
+.env.example @easytuner-team/security-team
+/server/app/core/security.py @easytuner-team/security-team
+/server/app/core/config.py @easytuner-team/security-team
+
+# Database migrations (require careful review)
+/server/alembic/versions/ @easytuner-team/database-team @easytuner-team/backend-team
+
+# CI/CD workflows
+/.github/workflows/ @easytuner-team/devops-team
+
+# Dependencies (security implications)
+/server/pyproject.toml @easytuner-team/backend-team @easytuner-team/security-team
+/server/poetry.lock @easytuner-team/backend-team @easytuner-team/security-team
+/client/package.json @easytuner-team/frontend-team @easytuner-team/security-team
+/client/package-lock.json @easytuner-team/frontend-team @easytuner-team/security-team
+
