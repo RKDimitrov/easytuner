@@ -1,33 +1,30 @@
-import { Box, Typography, Button, Paper } from '@mui/material';
-import { Link } from 'react-router-dom';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { useNavigate } from 'react-router-dom'
+import { Button } from '../components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { AlertCircle, Home } from 'lucide-react'
 
-export default function NotFoundPage() {
+export function NotFoundPage() {
+  const navigate = useNavigate()
+
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '60vh',
-      }}
-    >
-      <Paper sx={{ p: 6, textAlign: 'center', maxWidth: 500 }}>
-        <ErrorOutlineIcon sx={{ fontSize: 80, color: 'error.main', mb: 2 }} />
-        <Typography variant="h3" component="h1" gutterBottom>
-          404
-        </Typography>
-        <Typography variant="h5" gutterBottom>
-          Page Not Found
-        </Typography>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          The page you are looking for does not exist or has been moved.
-        </Typography>
-        <Button variant="contained" component={Link} to="/" sx={{ mt: 2 }}>
-          Go to Homepage
-        </Button>
-      </Paper>
-    </Box>
-  );
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="max-w-md w-full">
+        <CardHeader className="text-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+            <AlertCircle className="w-6 h-6 text-destructive" />
+          </div>
+          <CardTitle className="text-2xl">404 - Page Not Found</CardTitle>
+          <CardDescription>
+            The page you're looking for doesn't exist or has been moved.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center">
+          <Button onClick={() => navigate('/')}>
+            <Home className="w-4 h-4 mr-2" />
+            Back to Home
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
-

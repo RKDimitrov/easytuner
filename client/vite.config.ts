@@ -27,9 +27,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'redux-vendor': ['@reduxjs/toolkit', 'react-redux'],
-          'mui-vendor': ['@mui/material', '@emotion/react', '@emotion/styled'],
-          'plotly-vendor': ['plotly.js', 'react-plotly.js'],
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-slot', '@radix-ui/react-slider'],
+          'state-vendor': ['zustand'],
         },
       },
     },
