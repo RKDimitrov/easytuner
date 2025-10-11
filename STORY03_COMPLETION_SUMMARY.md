@@ -1,376 +1,315 @@
-# Story Completion Summary
+# Epic 02, Story 03 Completion Summary
 
-## Epic 01, Story 03: Client Project Initialization ✅
-
-**Completed:** October 10, 2025  
-**Status:** All acceptance criteria met
-
----
-
-## Tasks Completed
-
-### ✅ Task 1: Initialize Vite + React + TypeScript Project
-- Created `package.json` with project metadata and scripts
-- Created `tsconfig.json` with strict TypeScript configuration
-- Created `tsconfig.node.json` for Vite tooling
-- Created `vite.config.ts` with:
-  - React plugin
-  - Path aliases (`@/` → `src/`)
-  - API proxy configuration
-  - Code splitting optimizations
-- Created `index.html` entry point
-
-### ✅ Task 2 & 3: Install Dependencies
-**Core Dependencies:**
-- React 18 & React DOM
-- React Router DOM v6
-- Redux Toolkit & React Redux
-- Material-UI (MUI) with Emotion
-- Axios & Socket.io Client
-- Plotly.js for visualizations
-- TanStack Virtual for virtualization
-- React Hook Form with Zod validation
-
-**Dev Dependencies:**
-- TypeScript 5.3
-- ESLint with TypeScript & React plugins
-- Prettier
-- Vitest for testing
-- Type definitions for all packages
-
-### ✅ Task 4: Create Client Directory Structure
-```
-client/src/
-├── components/
-│   ├── common/          (ready for future components)
-│   └── layout/
-│       └── Layout.tsx   ✅
-├── features/
-│   ├── auth/            (ready for future features)
-│   └── projects/        (ready for future features)
-├── hooks/               (ready for custom hooks)
-├── pages/
-│   ├── HomePage.tsx     ✅
-│   └── NotFoundPage.tsx ✅
-├── services/
-│   └── api.ts           ✅
-├── store/
-│   └── index.ts         ✅
-├── types/
-│   └── index.ts         ✅
-├── utils/               (ready for utilities)
-├── App.tsx              ✅
-├── main.tsx             ✅
-├── theme.ts             ✅
-├── index.css            ✅
-└── vite-env.d.ts        ✅
-```
-
-### ✅ Task 5: Configure ESLint
-- Created `.eslintrc.json` with:
-  - ESLint recommended rules
-  - TypeScript recommended rules
-  - React hooks rules
-  - Prettier integration
-  - Custom rule configurations
-
-### ✅ Task 6: Configure Prettier
-- Created `.prettierrc` with formatting rules
-- Created `.prettierignore` for excluded files
-- Configured in package.json scripts
-
-### ✅ Task 7: Create Basic App Structure
-- **main.tsx**: Application entry with:
-  - React Router setup
-  - Redux Provider
-  - MUI Theme Provider
-  - CSS Baseline
-  
-- **App.tsx**: Main app component with routing
-
-- **Layout.tsx**: Application layout with:
-  - Header with AppBar
-  - Main content area with Container
-  - Footer
-
-- **HomePage.tsx**: Welcome page with:
-  - Project information
-  - Call-to-action buttons
-  - Legal notice
-
-- **NotFoundPage.tsx**: 404 error page
-
-- **theme.ts**: MUI theme configuration
-
-- **store/index.ts**: Redux store setup
-
-- **services/api.ts**: Axios API client with:
-  - Request/response interceptors
-  - Token management
-  - Error handling
-
-- **types/index.ts**: TypeScript type definitions
+**Story:** Project and FirmwareFile Models  
+**Date:** October 11, 2025  
+**Status:** ✅ COMPLETED
 
 ---
 
-## Acceptance Criteria Status
+## What Was Implemented
 
-- [x] Vite + React + TypeScript project is initialized
-- [x] All required dependencies are defined with npm
-- [x] Client directory structure is created
-- [x] Development server configuration is complete
-- [x] ESLint and Prettier are configured
-- [x] Basic routing structure is in place
+### 1. Database Models Created
 
----
+#### Base Model Mixin (`app/models/base.py`)
+- `TimestampMixin` class with `created_at` and `updated_at` fields
+- Automatic timestamp management using SQLAlchemy server defaults
+- Base `__repr__` method for all models
 
-## Files Created
+#### User Model (`app/models/user.py`)
+- Complete user model with authentication fields
+- Fields: `user_id`, `email`, `password_hash`, `role`, `is_active`
+- Activity tracking: `last_login_at`
+- Terms of Service: `tos_accepted_at`, `tos_version`
+- Relationships: `sessions` (one-to-many), `projects` (one-to-many)
+- Indexes on: `email`, `created_at`, `is_active`
 
-### Configuration Files (10)
-1. `package.json` - Dependencies and scripts
-2. `tsconfig.json` - TypeScript configuration
-3. `tsconfig.node.json` - Vite TypeScript configuration
-4. `vite.config.ts` - Vite build configuration
-5. `.eslintrc.json` - ESLint rules
-6. `.prettierrc` - Prettier formatting
-7. `.prettierignore` - Prettier exclusions
-8. `env.example` - Environment variables template
-9. `index.html` - HTML entry point
-10. `README.md` - Client documentation
+#### Session Model (`app/models/session.py`)
+- Refresh token management
+- Fields: `session_id`, `user_id`, `refresh_token_hash`, `expires_at`
+- Session metadata: `ip_address`, `user_agent`
+- Relationship: `user` (many-to-one)
+- Cascade delete when user is deleted
+- Indexes on: `user_id`, `expires_at`, `refresh_token_hash`
 
-### Source Files (14)
-11. `src/main.tsx` - Application entry
-12. `src/App.tsx` - Main App component
-13. `src/theme.ts` - MUI theme
-14. `src/index.css` - Global styles
-15. `src/vite-env.d.ts` - Environment types
-16. `src/store/index.ts` - Redux store
-17. `src/services/api.ts` - API client
-18. `src/types/index.ts` - Type definitions
-19. `src/components/layout/Layout.tsx` - Layout component
-20. `src/pages/HomePage.tsx` - Home page
-21. `src/pages/NotFoundPage.tsx` - 404 page
+#### Project Model (`app/models/project.py`)
+- Project organization with soft delete
+- Fields: `project_id`, `owner_user_id`, `name`, `description`, `is_private`
+- Soft delete: `deleted_at` timestamp
+- Methods: `soft_delete()`, `restore()`, `is_deleted` property
+- Relationships: `owner` (many-to-one), `files` (one-to-many)
+- **GIN index for fuzzy search** using `pg_trgm` extension on project names
+- Indexes on: `owner_user_id`, `created_at`, `deleted_at`, `name` (GIN)
 
----
+#### FirmwareFile Model (`app/models/firmware_file.py`)
+- Binary file management with soft delete
+- Fields: `file_id`, `project_id`, `filename`, `size_bytes`, `sha256`
+- Storage: `storage_path` (MinIO path)
+- Detection hint: `endianness_hint`
+- Soft delete: `deleted_at` timestamp
+- Methods: `soft_delete()`, `restore()`, `is_deleted` property
+- Relationship: `project` (many-to-one)
+- Cascade delete when project is deleted
+- Indexes on: `project_id`, `sha256`, `uploaded_at`, `deleted_at`
 
-## Next Steps (Manual Actions Required)
+### 2. Alembic Configuration
 
-### 1. Install Dependencies
+#### Async Support (`alembic/env.py`)
+- Configured for async SQLAlchemy using `asyncpg`
+- Automatic model discovery from `app.models`
+- Database URL loaded from application settings
+- Proper async migration execution
 
-```bash
-cd client
+#### Initial Migration
+- **Migration ID:** `490127e4c475`
+- **Name:** "Add user, session, project, and firmware file models"
+- Creates all 4 tables with proper:
+  - Primary keys (UUID)
+  - Foreign keys with CASCADE delete
+  - Indexes (B-tree and GIN)
+  - Unique constraints
+  - Timestamps with timezone
+- Enables `pg_trgm` PostgreSQL extension
 
-# Install all dependencies
-npm install
+### 3. Comprehensive Test Suite
 
-# This will create:
-# - node_modules/
-# - package-lock.json
-```
+#### Test Fixtures (`tests/conftest.py`)
+- Async test database engine
+- Database session fixture
+- Test data fixtures: `test_user`, `test_project`, `test_firmware_file`
+- Automatic table creation/cleanup per test
+- `pg_trgm` extension enabled for test database
 
-### 2. Configure Environment
+#### Model Tests (`tests/unit/test_models.py`)
+**15 tests total - ALL PASSING ✅**
 
-```bash
-# Copy example environment file
-cp env.example .env
+- **User Model Tests (3 tests)**
+  - Create user
+  - Unique email constraint
+  - User to projects relationship
 
-# Edit .env if needed
-# VITE_API_URL defaults to http://localhost:8000
-```
+- **Session Model Tests (2 tests)**
+  - Create session with metadata
+  - Cascade delete when user deleted
 
-### 3. Start Development Server
+- **Project Model Tests (4 tests)**
+  - Create project
+  - Soft delete functionality
+  - Restore soft-deleted project
+  - Cascade delete when user deleted
 
-```bash
-# Start dev server with hot reload
-npm run dev
+- **FirmwareFile Model Tests (4 tests)**
+  - Create firmware file
+  - Soft delete functionality
+  - Duplicate hash detection
+  - Cascade delete when project deleted
 
-# Server will start at http://localhost:3000
-```
-
-### 4. Verify Installation
-
-```bash
-# In browser, navigate to:
-# http://localhost:3000
-
-# You should see the EasyTuner welcome page
-
-# Verify hot reload by editing src/pages/HomePage.tsx
-```
-
-### 5. Run Code Quality Checks
-
-```bash
-# Lint code
-npm run lint
-
-# Format code
-npm run format
-
-# Type check
-npm run type-check
-```
-
----
-
-## Testing Performed
-
-### Manual Testing
-- ✅ package.json syntax is valid
-- ✅ All configuration files have valid syntax
-- ✅ TypeScript files compile without errors
-- ✅ Import paths are correct
-- ⚠️  Dev server not started (requires npm install)
-- ⚠️  Browser rendering not tested (requires dependencies)
-
-### Pending Testing (Requires Dependencies)
-- [ ] `npm install` completes successfully
-- [ ] Dev server starts without errors
-- [ ] App loads in browser
-- [ ] Routing works (navigate to non-existent route shows 404)
-- [ ] Hot reload works
-- [ ] ESLint runs without errors
-- [ ] Prettier formats correctly
+- **Relationship Tests (2 tests)**
+  - User to multiple projects
+  - Project to multiple files
 
 ---
 
-## Definition of Done
+## Database Schema
 
-- [x] Client directory structure created
-- [x] Vite + React + TypeScript configured
-- [x] All dependencies defined in package.json
-- [x] ESLint and Prettier configured
-- [x] Basic routing implemented
-- [x] Layout and pages created
-- [x] API client configured
-- [x] Redux store set up
-- [x] README documentation complete
-- [ ] Dependencies installed (requires manual `npm install`)
-- [ ] Dev server runs successfully (requires dependencies)
-- [ ] App renders in browser (requires dependencies)
+### Tables Created
+
+```sql
+users
+├── user_id (UUID, PK)
+├── email (VARCHAR(255), UNIQUE)
+├── password_hash (VARCHAR(255))
+├── role (VARCHAR(50))
+├── is_active (BOOLEAN)
+├── last_login_at (TIMESTAMP)
+├── tos_accepted_at (TIMESTAMP)
+├── tos_version (INTEGER)
+├── created_at (TIMESTAMPTZ)
+└── updated_at (TIMESTAMPTZ)
+
+sessions
+├── session_id (UUID, PK)
+├── user_id (UUID, FK → users.user_id, CASCADE)
+├── refresh_token_hash (VARCHAR(64), UNIQUE)
+├── expires_at (TIMESTAMPTZ)
+├── ip_address (VARCHAR(45))
+├── user_agent (VARCHAR(500))
+├── created_at (TIMESTAMPTZ)
+└── updated_at (TIMESTAMPTZ)
+
+projects
+├── project_id (UUID, PK)
+├── owner_user_id (UUID, FK → users.user_id, CASCADE)
+├── name (VARCHAR(255))
+├── description (TEXT)
+├── is_private (BOOLEAN)
+├── deleted_at (TIMESTAMPTZ)
+├── created_at (TIMESTAMPTZ)
+└── updated_at (TIMESTAMPTZ)
+
+firmware_files
+├── file_id (UUID, PK)
+├── project_id (UUID, FK → projects.project_id, CASCADE)
+├── filename (VARCHAR(255))
+├── size_bytes (BIGINT)
+├── sha256 (VARCHAR(64))
+├── storage_path (VARCHAR(500))
+├── endianness_hint (VARCHAR(10))
+├── uploaded_at (TIMESTAMPTZ)
+├── deleted_at (TIMESTAMPTZ)
+├── created_at (TIMESTAMPTZ)
+└── updated_at (TIMESTAMPTZ)
+```
+
+### Indexes Created
+
+- **users:** email (unique), created_at, is_active
+- **sessions:** user_id, expires_at, refresh_token_hash
+- **projects:** owner_user_id, created_at, deleted_at, **name (GIN for fuzzy search)**
+- **firmware_files:** project_id, sha256, uploaded_at, deleted_at
 
 ---
 
 ## Key Features Implemented
 
-### Routing Structure
-- Home page (`/`)
-- 404 page (catch-all route)
-- Layout wrapper with header and footer
-- Ready for additional routes
+### ✅ Soft Delete
+- Projects and firmware files support soft deletion
+- `deleted_at` timestamp (NULL = active)
+- Helper methods: `soft_delete()`, `restore()`
+- Property: `is_deleted`
+- Soft-deleted records remain in database for audit
 
-### API Integration
-- Configured Axios client
-- Request/response interceptors
-- Authentication token handling
-- Error handling
-- Health check method
+### ✅ Fuzzy Text Search
+- PostgreSQL `pg_trgm` extension enabled
+- GIN index on project names
+- Enables fuzzy matching for project search
+- Query example: `SELECT * FROM projects WHERE name % 'ecu'`
 
-### State Management
-- Redux store configured
-- Redux Toolkit setup
-- Ready for feature slices
+### ✅ File Deduplication
+- SHA-256 hash stored and indexed
+- Can detect duplicate files by hash
+- Supports same content uploaded multiple times
 
-### UI Framework
-- Material-UI theme customization
-- Responsive layout
-- Typography settings
-- Component style overrides
-- Custom color palette
+### ✅ Cascade Deletes
+- Delete user → deletes sessions and projects
+- Delete project → deletes firmware files
+- Maintains referential integrity
 
-### Development Experience
-- Hot module replacement (HMR)
-- TypeScript strict mode
-- ESLint with React rules
-- Prettier auto-formatting
-- Path aliases (`@/`)
-- API proxy to backend
+### ✅ Async Support
+- All models work with async SQLAlchemy
+- Alembic configured for async migrations
+- Test fixtures support async operations
 
 ---
 
-## Notes for Next Story
-
-**Epic 01, Story 04: Docker Compose Setup**
-
-Prerequisites completed:
-- ✅ Server structure complete
-- ✅ Client structure complete
-- ✅ Both have environment configuration
-
-Ready to proceed with:
-- Creating docker-compose.yml
-- Configuring PostgreSQL, Redis, MinIO
-- Creating development environment
-- Setting up networking between services
-
----
-
-## Project Structure Status
+## Test Results
 
 ```
-easytuner/
-├── .github/
-├── client/                      ← COMPLETED ✅
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── features/
-│   │   ├── hooks/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── store/
-│   │   ├── types/
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   ├── theme.ts
-│   │   └── index.css
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   ├── .eslintrc.json
-│   ├── .prettierrc
-│   └── README.md
-├── docs/
-├── monitoring/
-├── server/                      ← COMPLETED ✅
-├── .gitignore
-├── CONTRIBUTING.md
-└── README.md
+tests/unit/test_models.py::TestUserModel::test_create_user PASSED
+tests/unit/test_models.py::TestUserModel::test_user_unique_email_constraint PASSED
+tests/unit/test_models.py::TestUserModel::test_user_relationships PASSED
+tests/unit/test_models.py::TestSessionModel::test_create_session PASSED
+tests/unit/test_models.py::TestSessionModel::test_session_cascade_delete PASSED
+tests/unit/test_models.py::TestProjectModel::test_create_project PASSED
+tests/unit/test_models.py::TestProjectModel::test_project_soft_delete PASSED
+tests/unit/test_models.py::TestProjectModel::test_project_restore PASSED
+tests/unit/test_models.py::TestProjectModel::test_project_cascade_delete PASSED
+tests/unit/test_models.py::TestFirmwareFileModel::test_create_firmware_file PASSED
+tests/unit/test_models.py::TestFirmwareFileModel::test_firmware_file_soft_delete PASSED
+tests/unit/test_models.py::TestFirmwareFileModel::test_firmware_file_duplicate_hash_detection PASSED
+tests/unit/test_models.py::TestFirmwareFileModel::test_firmware_file_cascade_delete PASSED
+tests/unit/test_models.py::TestModelRelationships::test_user_to_projects_relationship PASSED
+tests/unit/test_models.py::TestModelRelationships::test_project_to_files_relationship PASSED
+
+============================== 15 passed in 7.60s ==============================
 ```
 
----
-
-## Configuration Highlights
-
-### Vite Configuration
-- **Dev Server**: Port 3000 with proxy to backend
-- **Build Optimization**: Code splitting by vendor
-- **Path Aliases**: `@/` mapped to `src/`
-- **Hot Reload**: Enabled for development
-
-### TypeScript Configuration
-- **Strict Mode**: Full type safety
-- **Modern Target**: ES2020
-- **JSX**: React JSX transform
-- **Path Mapping**: Import aliases supported
-
-### Code Quality
-- **ESLint**: TypeScript + React rules
-- **Prettier**: Consistent formatting
-- **Integration**: ESLint-Prettier compatibility
+**Code Coverage:** 82.11%
 
 ---
 
-## Time Tracking
+## Files Created/Modified
 
-**Estimated Effort:** 0.5 days  
-**Actual Effort:** ~0.5 days  
-**Status:** On schedule ✅
+### Created Files
+- `server/app/models/base.py` - Base mixin for timestamps
+- `server/app/models/user.py` - User model
+- `server/app/models/session.py` - Session model
+- `server/app/models/project.py` - Project model
+- `server/app/models/firmware_file.py` - FirmwareFile model
+- `server/alembic.ini` - Alembic configuration
+- `server/alembic/env.py` - Alembic async environment
+- `server/alembic/versions/490127e4c475_*.py` - Initial migration
+- `server/tests/unit/test_models.py` - Comprehensive model tests
+- `STORY03_COMPLETION_SUMMARY.md` - This document
+
+### Modified Files
+- `server/app/models/__init__.py` - Export all models
+- `server/tests/conftest.py` - Enhanced with database fixtures
 
 ---
 
-**Story Status:** COMPLETE ✅  
-**Ready for:** Epic 01, Story 04 - Docker Compose Setup
+## Database Verification
 
-**Next Manual Step:** Run `cd client && npm install` to install dependencies
+### Tables in Database
+```
+              List of relations
+ Schema |      Name       | Type  |   Owner
+--------+-----------------+-------+-----------
+ public | alembic_version | table | easytuner
+ public | firmware_files  | table | easytuner
+ public | projects        | table | easytuner
+ public | sessions        | table | easytuner
+ public | users           | table | easytuner
+```
 
+### Extensions Enabled
+- `pg_trgm` - PostgreSQL trigram matching for fuzzy search
+
+---
+
+## Acceptance Criteria Status
+
+All acceptance criteria from the story are met:
+
+- [x] Project model is created with all required fields
+- [x] FirmwareFile model is created with all required fields  
+- [x] Soft delete functionality is implemented
+- [x] File hash indexing is configured
+- [x] Full-text search index on project names
+- [x] Relationships to User model work correctly
+- [x] Migration is generated and applied
+- [x] User and Session models created (bonus - also completed Story 02)
+- [x] All tests pass
+- [x] No linter errors
+
+---
+
+## Next Steps
+
+**Epic 02, Story 04:** Scan & Candidate Models
+- Create `Scan` model for detection job tracking
+- Create `ScanCandidate` model for detected patterns
+- Add relationships to FirmwareFile
+- Generate migration
+- Write tests
+
+**Epic 02, Story 05:** Annotation & Audit Models
+- Create `Annotation` model for user labels
+- Create `AuditLog` model for tracking changes
+- Complete Epic 02
+
+Then proceed to **Epic 03: Authentication & Authorization**
+
+---
+
+## Notes
+
+- All models use UUID primary keys for better distribution
+- Timestamps use timezone-aware datetime (PostgreSQL TIMESTAMPTZ)
+- Foreign keys use CASCADE delete for proper cleanup
+- Models are well-documented with docstrings
+- Test coverage is comprehensive
+- Server health check: ✅ Healthy
+
+---
+
+**Epic 02 Progress:** 3/5 stories complete (60%)
