@@ -1,7 +1,10 @@
 """Database models."""
 
+from app.models.annotation import Annotation
+from app.models.audit_log import AuditLog
 from app.models.base import TimestampMixin
 from app.models.candidate import Candidate
+from app.models.export import Export
 from app.models.firmware_file import FirmwareFile
 from app.models.project import Project
 from app.models.scan_job import ScanJob
@@ -16,4 +19,7 @@ __all__ = [
     "FirmwareFile",
     "ScanJob",
     "Candidate",
+    "Annotation",
+    "AuditLog",
+    "Export",
 ]

@@ -12,6 +12,9 @@ from app.database import Base
 from app.models.base import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.annotation import Annotation
+    from app.models.audit_log import AuditLog
+    from app.models.export import Export
     from app.models.project import Project
     from app.models.session import Session
 
@@ -106,6 +109,26 @@ class User(Base, TimestampMixin):
         back_populates="owner",
         cascade="all, delete-orphan",
         doc="Projects owned by the user",
+    )
+
+    annotations: Mapped[list["Annotation"]] = relationship(
+        "Annotation",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        doc="User's annotations on candidates",
+    )
+
+    audit_logs: Mapped[list["AuditLog"]] = relationship(
+        "AuditLog",
+        back_populates="user",
+        doc="Audit logs for user actions",
+    )
+
+    exports: Mapped[list["Export"]] = relationship(
+        "Export",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        doc="Exports requested by the user",
     )
 
     # Indexes

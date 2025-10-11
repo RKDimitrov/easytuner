@@ -11,6 +11,7 @@ from app.database import Base
 from app.models.base import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.annotation import Annotation
     from app.models.scan_job import ScanJob
 
 
@@ -123,6 +124,13 @@ class Candidate(Base, TimestampMixin):
         "ScanJob",
         back_populates="candidates",
         doc="Scan job that detected this candidate",
+    )
+
+    annotations: Mapped[list["Annotation"]] = relationship(
+        "Annotation",
+        back_populates="candidate",
+        cascade="all, delete-orphan",
+        doc="User annotations for this candidate",
     )
 
     # Indexes and constraints

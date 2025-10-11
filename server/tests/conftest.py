@@ -156,3 +156,63 @@ async def test_firmware_file(db_session: AsyncSession, test_project: Project) ->
     await db_session.refresh(firmware_file)
     return firmware_file
 
+
+@pytest_asyncio.fixture
+async def test_scan_job(db_session: AsyncSession, test_firmware_file: FirmwareFile):
+    """
+    Create a test scan job.
+    
+    Args:
+        db_session: Database session
+        test_firmware_file: Test firmware file
+        
+    Returns:
+        ScanJob: Test scan job
+    """
+    from app.models.scan_job import ScanJob
+    
+    scan = ScanJob(
+        file_id=test_firmware_file.file_id,
+        status="queued",
+        scan_config={"data_types": ["u16LE", "u32LE"], "min_confidence": 0.6},
+    )
+    db_session.add(scan)
+    await db_session.commit()
+    await db_session.refresh(scan)
+    return scan
+
+
+@pytest_asyncio.fixture
+async def test_candidate(db_session: AsyncSession, test_scan_job):
+    """
+    Create a test candidate.
+    
+    Args:
+        db_session: Database session
+        test_scan_job: Test scan job
+        
+    Returns:
+        Candidate: Test candidate
+    """
+    from app.models.candidate import Candidate
+    
+    candidate = Candidate(
+        scan_id=test_scan_job.scan_id,
+        type="2D",
+        confidence=0.85,
+        byte_offset_start=1000,
+        byte_offset_end=1512,
+        data_type="u16LE",
+        dimensions={"rows": 16, "cols": 16},
+        feature_scores={
+            "gradient_smoothness": 0.85,
+            "entropy": 0.72,
+            "boundary_alignment": 1.0,
+        },
+        detection_method_version="v1.0.0",
+    )
+    db_session.add(candidate)
+    await db_session.commit()
+    await db_session.refresh(candidate)
+    return candidate
+

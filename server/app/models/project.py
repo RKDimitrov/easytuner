@@ -12,6 +12,7 @@ from app.database import Base
 from app.models.base import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.export import Export
     from app.models.firmware_file import FirmwareFile
     from app.models.user import User
 
@@ -95,6 +96,13 @@ class Project(Base, TimestampMixin):
         back_populates="project",
         cascade="all, delete-orphan",
         doc="Firmware files in this project",
+    )
+
+    exports: Mapped[list["Export"]] = relationship(
+        "Export",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        doc="Exports generated for this project",
     )
 
     # Indexes
