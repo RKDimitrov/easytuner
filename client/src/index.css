@@ -1,49 +1,111 @@
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  color-scheme: light dark;
+@layer base {
+  :root {
+    /* Core Colors */
+    --background: 240 10% 3.9%; /* Deep Charcoal */
+    --foreground: 0 0% 98%; /* Crisp White */
+    
+    /* Accent Colors */
+    --primary: 217 91% 60%; /* Electric Blue */
+    --primary-foreground: 0 0% 98%;
+    
+    --destructive: 0 84% 60%; /* Crimson Red */
+    --destructive-foreground: 0 0% 98%;
+    
+    --warning: 38 92% 50%; /* Amber Yellow */
+    --warning-foreground: 0 0% 9%;
+    
+    --success: 142 76% 36%; /* Vibrant Green */
+    --success-foreground: 0 0% 98%;
+    
+    /* Data/Mono */
+    --data: 180 100% 85%; /* Light Cyan (monospace) */
+    
+    /* UI Elements */
+    --card: 240 10% 8%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 240 10% 8%;
+    --popover-foreground: 0 0% 98%;
+    
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 64.9%;
+    
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
+    
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 217 91% 60%;
+    
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
   
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Custom utility class for data/monospace text */
+.text-data {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  color: hsl(180 100% 85%);
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-#root {
-  width: 100%;
-  min-height: 100vh;
-}
-
-/* Custom scrollbar */
+/* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  @apply bg-background;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  @apply bg-muted rounded;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  @apply bg-muted-foreground;
 }
 
+/* Hex viewer specific styles */
+.hex-byte {
+  @apply inline-block w-8 text-center font-mono text-sm;
+}
+
+.hex-address {
+  @apply font-mono text-muted-foreground text-sm;
+}
+
+.hex-ascii {
+  @apply font-mono text-muted-foreground text-sm;
+}
+
+/* Animation for scan progress */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
