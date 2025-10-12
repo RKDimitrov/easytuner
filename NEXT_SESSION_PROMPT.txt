@@ -1,0 +1,32 @@
+I'm continuing EasyTuner development (ECU firmware analysis MVP).
+
+Context: Epic 01 (setup) and Epic 02 (database) are COMPLETE.
+Starting Epic 03: Authentication & Authorization.
+
+Read these attached files:
+1. CURRENT_STATUS.md - Where we are
+2. docs/stories/epic03-story01-password-management.md - Next task
+3. EPIC02_SUMMARY.md - What we just finished (for context)
+
+Current Status:
+- ✅ Epic 01: Docker, FastAPI, React running
+- ✅ Epic 02: 10 database tables, 60 tests passing, 88.79% coverage
+- → Epic 03, Story 01: Implement password hashing with bcrypt
+
+Tech Stack:
+- Backend: FastAPI + SQLAlchemy + PostgreSQL (using Poetry)
+- Frontend: React + TypeScript + Vite (using npm)
+- Database: 10 tables with full relationships and advanced features
+
+Database Models Available:
+- User (with password_hash field)
+- Session (for refresh tokens)
+- Project, FirmwareFile, ScanJob, Candidate
+- Annotation, AuditLog, Export
+
+Dependencies Already Installed:
+- passlib[bcrypt] - for password hashing
+- python-jose[cryptography] - for JWT tokens
+
+Begin implementation of Epic 03, Story 01: Password hashing service with bcrypt.
+

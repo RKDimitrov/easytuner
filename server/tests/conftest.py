@@ -87,7 +87,7 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture
 async def test_user(db_session: AsyncSession) -> User:
     """
-    Create a test user.
+    Create a test user with TOS accepted.
     
     Args:
         db_session: Database session
@@ -95,11 +95,16 @@ async def test_user(db_session: AsyncSession) -> User:
     Returns:
         User: Test user
     """
+    from datetime import datetime
+    from app.auth.password import hash_password
+    
     user = User(
         email="test@example.com",
-        password_hash="hashed_password",
+        password_hash=hash_password("TestPassword123!"),
         role="user",
         is_active=True,
+        tos_accepted_at=datetime.utcnow(),  # timezone-naive for PostgreSQL
+        tos_version=1,
     )
     db_session.add(user)
     await db_session.commit()
@@ -215,4 +220,189 @@ async def test_candidate(db_session: AsyncSession, test_scan_job):
     await db_session.commit()
     await db_session.refresh(candidate)
     return candidate
+
+
+# Authentication fixtures for integration tests
+
+@pytest_asyncio.fixture
+async def async_client(test_engine) -> AsyncGenerator:
+    """Get async test client with database override for test_auth_dependencies."""
+    from httpx import AsyncClient
+    from app.main import app
+    from app.database import get_db
+    
+    # Override get_db dependency
+    async def override_get_db():
+        async_session = async_sessionmaker(
+            test_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        async with async_session() as session:
+            yield session
+            await session.rollback()
+    
+    app.dependency_overrides[get_db] = override_get_db
+    
+    # Import test app routes
+    from tests.integration.test_auth_dependencies import app as test_app
+    test_app.dependency_overrides[get_db] = override_get_db
+    
+    async with AsyncClient(app=test_app, base_url="http://test") as client:
+        yield client
+    
+    # Clean up
+    app.dependency_overrides.clear()
+    test_app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def async_client_main(test_engine) -> AsyncGenerator:
+    """Get async test client for main app with database override."""
+    from httpx import AsyncClient
+    from app.main import app
+    from app.database import get_db
+    
+    # Override get_db dependency
+    async def override_get_db():
+        async_session = async_sessionmaker(
+            test_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        async with async_session() as session:
+            yield session
+            await session.rollback()
+    
+    app.dependency_overrides[get_db] = override_get_db
+    
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        yield client
+    
+    # Clean up
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def test_user_with_tos(db_session: AsyncSession) -> User:
+    """Create a test user with TOS accepted."""
+    from datetime import datetime
+    from app.auth.password import hash_password
+    
+    user = User(
+        email="user@example.com",
+        password_hash=hash_password("TestPassword123!"),
+        role="user",
+        is_active=True,
+        tos_accepted_at=datetime.utcnow(),  # timezone-naive
+        tos_version=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def admin_user(db_session: AsyncSession) -> User:
+    """Create an admin user."""
+    from datetime import datetime
+    from app.auth.password import hash_password
+    
+    user = User(
+        email="admin@example.com",
+        password_hash=hash_password("AdminPassword123!"),
+        role="admin",
+        is_active=True,
+        tos_accepted_at=datetime.utcnow(),  # timezone-naive
+        tos_version=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def inactive_user(db_session: AsyncSession) -> User:
+    """Create an inactive user."""
+    from app.auth.password import hash_password
+    
+    user = User(
+        email="inactive@example.com",
+        password_hash=hash_password("InactivePassword123!"),
+        role="user",
+        is_active=False,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def user_without_tos(db_session: AsyncSession) -> User:
+    """Create a user without TOS acceptance."""
+    from app.auth.password import hash_password
+    
+    user = User(
+        email="notos@example.com",
+        password_hash=hash_password("NoTOSPassword123!"),
+        role="user",
+        is_active=True,
+        tos_accepted_at=None,
+        tos_version=None,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def access_token(test_user: User) -> str:
+    """Create an access token for test user."""
+    from app.auth.jwt import create_access_token
+    
+    return create_access_token({
+        "sub": str(test_user.user_id),
+        "email": test_user.email,
+        "role": test_user.role,
+    })
+
+
+@pytest.fixture
+def admin_token(admin_user: User) -> str:
+    """Create an access token for admin user."""
+    from app.auth.jwt import create_access_token
+    
+    return create_access_token({
+        "sub": str(admin_user.user_id),
+        "email": admin_user.email,
+        "role": admin_user.role,
+    })
+
+
+@pytest.fixture
+def inactive_user_token(inactive_user: User) -> str:
+    """Create an access token for inactive user."""
+    from app.auth.jwt import create_access_token
+    
+    return create_access_token({
+        "sub": str(inactive_user.user_id),
+        "email": inactive_user.email,
+        "role": inactive_user.role,
+    })
+
+
+@pytest.fixture
+def user_without_tos_token(user_without_tos: User) -> str:
+    """Create an access token for user without TOS."""
+    from app.auth.jwt import create_access_token
+    
+    return create_access_token({
+        "sub": str(user_without_tos.user_id),
+        "email": user_without_tos.email,
+        "role": user_without_tos.role,
+    })
 

@@ -56,6 +56,12 @@ app.add_middleware(
     allow_headers=settings.cors_allow_headers,
 )
 
+# Include routers
+from app.routers import auth, scan
+
+app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(scan.router, prefix=settings.api_v1_prefix)
+
 
 @app.get("/", status_code=status.HTTP_200_OK)
 async def root() -> dict[str, Any]:
