@@ -6,6 +6,7 @@ import { toast } from '../hooks/use-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { TOSModal } from '../components/TOSModal'
+import { Header } from '../components/Header'
 import { Upload as UploadIcon, FileCode, Zap, AlertCircle } from 'lucide-react'
 
 const MAX_FILE_SIZE = 16 * 1024 * 1024 // 16MB
@@ -144,8 +145,10 @@ export function Upload() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl space-y-6">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="flex items-center justify-center p-4 pt-8">
+        <div className="w-full max-w-4xl space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold tracking-tight">ECU Map Recognition</h1>
@@ -233,10 +236,11 @@ export function Upload() {
             </p>
           </CardContent>
         </Card>
+        
+        {/* TOS Modal */}
+        <TOSModal open={showTOSModal} onAccept={handleTOSAccept} />
       </div>
-
-      {/* TOS Modal */}
-      <TOSModal open={showTOSModal} onAccept={handleTOSAccept} />
+      </div>
     </div>
   )
 }

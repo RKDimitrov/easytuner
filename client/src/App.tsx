@@ -4,6 +4,7 @@ import { Upload } from './pages/Upload'
 import { Analysis } from './pages/Analysis'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
+import { ProjectDashboard } from './pages/ProjectDashboard'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { setupAuthInterceptor } from './store/authStore'
@@ -31,6 +32,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Analysis />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects"
+        element={
+          <ProtectedRoute>
+            <ProjectDashboard />
           </ProtectedRoute>
         }
       />
