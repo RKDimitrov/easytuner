@@ -5,6 +5,7 @@ import { Analysis } from './pages/Analysis'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { ProjectDashboard } from './pages/ProjectDashboard'
+import { ProjectDetail } from './pages/ProjectDetail'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { setupAuthInterceptor } from './store/authStore'
@@ -40,6 +41,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ProjectDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects/:projectId"
+        element={
+          <ProtectedRoute>
+            <ProjectDetail />
           </ProtectedRoute>
         }
       />

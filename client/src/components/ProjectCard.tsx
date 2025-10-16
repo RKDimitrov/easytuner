@@ -5,13 +5,22 @@
  * Used in the project dashboard grid.
  */
 
-import { Lock, FileCode } from 'lucide-react'
+import { Lock, FileCode, MoreVertical, Edit, Trash } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
+import { Button } from './ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
 import { Project } from '../types/project'
 
 interface ProjectCardProps {
   project: Project
   onClick: () => void
+  onEdit?: (project: Project) => void
+  onDelete?: (project: Project) => void
 }
 
 /**
@@ -36,20 +45,64 @@ function formatRelativeTime(timestamp: string): string {
   return `${diffYears} ${diffYears === 1 ? 'year' : 'years'} ago`
 }
 
-export function ProjectCard({ project, onClick }: ProjectCardProps) {
+export function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardProps) {
   const fileCount = project.file_count ?? 0
+
+  const handleMenuClick = (e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click
+  }
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onEdit?.(project)
+  }
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onDelete?.(project)
+  }
 
   return (
     <Card 
-      className="cursor-pointer hover:shadow-lg transition-shadow duration-200 hover:border-primary/50"
+      className="cursor-pointer hover:shadow-lg transition-shadow duration-200 hover:border-primary/50 group"
       onClick={onClick}
     >
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span className="truncate">{project.name}</span>
-          {project.is_private && (
-            <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0 ml-2" />
-          )}
+          <div className="flex items-center gap-2">
+            {project.is_private && (
+              <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            )}
+            {(onEdit || onDelete) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={handleMenuClick}
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onEdit && (
+                    <DropdownMenuItem onClick={handleEdit}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {onDelete && (
+                    <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+                      <Trash className="w-4 h-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </CardTitle>
         <CardDescription className="line-clamp-2 min-h-[2.5rem]">
           {project.description || 'No description'}

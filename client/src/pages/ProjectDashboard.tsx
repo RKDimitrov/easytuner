@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Folder, AlertCircle, RefreshCw } from 'lucide-react'
 import { Header } from '../components/Header'
 import { ProjectCard } from '../components/ProjectCard'
+import { CreateProjectModal } from '../components/CreateProjectModal'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardHeader, CardContent } from '../components/ui/card'
@@ -138,6 +139,8 @@ export function ProjectDashboard() {
   const { projects, isLoading, error, fetchProjects } = useProjectStore()
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('lastModified')
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
 
   // Fetch projects on mount
   useEffect(() => {
@@ -154,10 +157,38 @@ export function ProjectDashboard() {
     navigate(`/projects/${project.project_id}`)
   }
 
-  // Create project (placeholder for now - will be modal in Story 02)
+  // Create project
   const handleCreateProject = () => {
-    // TODO: Open create project modal (Epic 08 Story 02)
-    alert('Create project modal will be implemented in Story 02')
+    setEditingProject(null)
+    setShowCreateModal(true)
+  }
+
+  // Edit project
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project)
+    setShowCreateModal(true)
+  }
+
+  // Delete project - this will be handled by the modal's delete functionality
+  const handleDeleteProject = (project: Project) => {
+    // The delete functionality is built into the CreateProjectModal
+    // We just need to open it in edit mode and the user can delete from there
+    setEditingProject(project)
+    setShowCreateModal(true)
+  }
+
+  // Handle modal close
+  const handleModalClose = (open: boolean) => {
+    if (!open) {
+      setShowCreateModal(false)
+      setEditingProject(null)
+    }
+  }
+
+  // Handle modal success
+  const handleModalSuccess = () => {
+    // Projects will be updated optimistically by the store
+    // No need to refetch
   }
 
   return (
@@ -224,11 +255,21 @@ export function ProjectDashboard() {
                 key={project.project_id}
                 project={project}
                 onClick={() => handleProjectClick(project)}
+                onEdit={handleEditProject}
+                onDelete={handleDeleteProject}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* Create/Edit Project Modal */}
+      <CreateProjectModal
+        open={showCreateModal || !!editingProject}
+        onOpenChange={handleModalClose}
+        project={editingProject}
+        onSuccess={handleModalSuccess}
+      />
     </div>
   )
 }

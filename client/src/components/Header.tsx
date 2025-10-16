@@ -34,6 +34,12 @@ export function Header() {
             >
               Analysis
             </Link>
+            <Link
+              to="/projects"
+              className="transition-colors hover:text-primary text-foreground/60"
+            >
+              Projects
+            </Link>
           </nav>
         </div>
 
