@@ -2,17 +2,17 @@
  * ProjectDashboard Page
  * 
  * Main project management dashboard.
- * Shows all user projects with search, sort, and create functionality.
+ * Shows all user projects with advanced search, filtering, sort, and create functionality.
  */
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Folder, AlertCircle, RefreshCw } from 'lucide-react'
+import { Plus, Folder, AlertCircle, RefreshCw } from 'lucide-react'
 import { Header } from '../components/Header'
 import { ProjectCard } from '../components/ProjectCard'
 import { CreateProjectModal } from '../components/CreateProjectModal'
+import { ProjectFilters, ProjectFilters as ProjectFiltersType } from '../components/ProjectFilters'
 import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
 import { Card, CardHeader, CardContent } from '../components/ui/card'
 import { Skeleton } from '../components/ui/skeleton'
 import {
@@ -24,39 +24,8 @@ import {
 } from '../components/ui/select'
 import { useProjectStore } from '../store/projectStore'
 import { Project, SortOption } from '../types/project'
+import { filterAndSortProjects, debounce } from '../lib/projectFilters'
 
-/**
- * Filter and sort projects
- */
-function filterAndSort(
-  projects: Project[],
-  searchTerm: string,
-  sortBy: SortOption
-): Project[] {
-  // Filter by search term
-  let filtered = projects
-  if (searchTerm) {
-    const term = searchTerm.toLowerCase()
-    filtered = projects.filter(p => 
-      p.name.toLowerCase().includes(term) ||
-      p.description?.toLowerCase().includes(term)
-    )
-  }
-  
-  // Sort
-  return filtered.sort((a, b) => {
-    switch (sortBy) {
-      case 'lastModified':
-        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      case 'name':
-        return a.name.localeCompare(b.name)
-      case 'created':
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      default:
-        return 0
-    }
-  })
-}
 
 /**
  * Empty state - No projects yet
@@ -137,20 +106,45 @@ function ProjectGridSkeleton({ count = 6 }: { count?: number }) {
 export function ProjectDashboard() {
   const navigate = useNavigate()
   const { projects, isLoading, error, fetchProjects } = useProjectStore()
-  const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('lastModified')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [filters, setFilters] = useState<ProjectFiltersType>({
+    search: '',
+    dateRange: 'all',
+    customDateFrom: undefined,
+    customDateTo: undefined,
+    fileCount: 'all',
+    privacy: 'all',
+  })
 
   // Fetch projects on mount
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
 
+  // Debounced filter update for search
+  const debouncedSetFilters = useCallback(
+    debounce((newFilters: ProjectFiltersType) => {
+      setFilters(newFilters)
+    }, 300),
+    []
+  )
+
+  // Handle filter changes
+  const handleFiltersChange = useCallback((newFilters: ProjectFiltersType) => {
+    // Use debounced update for search, immediate for other filters
+    if (newFilters.search !== filters.search) {
+      debouncedSetFilters(newFilters)
+    } else {
+      setFilters(newFilters)
+    }
+  }, [filters.search, debouncedSetFilters])
+
   // Filter and sort projects
   const filteredProjects = useMemo(() => {
-    return filterAndSort(projects, searchTerm, sortBy)
-  }, [projects, searchTerm, sortBy])
+    return filterAndSortProjects(projects, filters, sortBy)
+  }, [projects, filters, sortBy])
 
   // Navigate to project detail (placeholder for now)
   const handleProjectClick = (project: Project) => {
@@ -210,21 +204,17 @@ export function ProjectDashboard() {
           </Button>
         </div>
 
-        {/* Search & Sort Controls */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          {/* Search Bar */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search projects..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          
-          {/* Sort Dropdown */}
+        {/* Advanced Filters */}
+        <div className="mb-6">
+          <ProjectFilters
+            onFiltersChange={handleFiltersChange}
+            resultCount={filteredProjects.length}
+            totalCount={projects.length}
+          />
+        </div>
+
+        {/* Sort Controls */}
+        <div className="flex justify-end mb-6">
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Sort by..." />
@@ -243,8 +233,8 @@ export function ProjectDashboard() {
         ) : error ? (
           <ErrorState message={error} onRetry={fetchProjects} />
         ) : filteredProjects.length === 0 ? (
-          searchTerm ? (
-            <EmptySearchState searchTerm={searchTerm} />
+          filters.search ? (
+            <EmptySearchState searchTerm={filters.search} />
           ) : (
             <EmptyProjectsState onCreateClick={handleCreateProject} />
           )

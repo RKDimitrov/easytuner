@@ -9,11 +9,14 @@ import { ProjectDetail } from './pages/ProjectDetail'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { setupAuthInterceptor } from './store/authStore'
+import { initializeSampleProjects } from './services/mockProjectService'
 
 function App() {
   // Setup axios interceptor for automatic token handling
   useEffect(() => {
     setupAuthInterceptor()
+    // Initialize sample projects for demo purposes
+    initializeSampleProjects()
   }, [])
 
   return (
