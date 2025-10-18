@@ -4,47 +4,85 @@
 
 @layer base {
   :root {
-    /* Core Colors */
-    --background: 240 10% 3.9%; /* Deep Charcoal */
-    --foreground: 0 0% 98%; /* Crisp White */
+    /* Light mode colors */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
     
-    /* Accent Colors */
-    --primary: 217 91% 60%; /* Electric Blue */
-    --primary-foreground: 0 0% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
     
-    --destructive: 0 84% 60%; /* Crimson Red */
-    --destructive-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
     
-    --warning: 38 92% 50%; /* Amber Yellow */
-    --warning-foreground: 0 0% 9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
     
-    --success: 142 76% 36%; /* Vibrant Green */
-    --success-foreground: 0 0% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
     
-    /* Data/Mono */
-    --data: 180 100% 85%; /* Light Cyan (monospace) */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
     
-    /* UI Elements */
-    --card: 240 10% 8%;
-    --card-foreground: 0 0% 98%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
     
-    --popover: 240 10% 8%;
-    --popover-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
     
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
-    
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 64.9%;
-    
-    --accent: 240 4% 16%;
-    --accent-foreground: 0 0% 98%;
-    
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --ring: 217 91% 60%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
     
     --radius: 0.5rem;
+    
+    /* Custom colors */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 9%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    
+    --data: 180 100% 20%;
+  }
+
+  .dark {
+    /* Dark mode colors */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+    
+    /* Custom colors for dark mode */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 9%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    
+    --data: 180 100% 85%;
   }
 }
 
@@ -109,3 +147,48 @@
 .animate-pulse-glow {
   animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Density classes */
+.density-compact {
+  --spacing-unit: 0.25rem;
+}
+
+.density-comfortable {
+  --spacing-unit: 0.5rem;
+}
+
+.density-spacious {
+  --spacing-unit: 0.75rem;
+}
+
+/* Font size classes */
+.font-small {
+  font-size: 12px;
+}
+
+.font-medium {
+  font-size: 14px;
+}
+
+.font-large {
+  font-size: 16px;
+}
+
+/* Apply density to common spacing utilities */
+.density-compact .space-y-1 > * + * { margin-top: calc(var(--spacing-unit) * 1); }
+.density-compact .space-y-2 > * + * { margin-top: calc(var(--spacing-unit) * 2); }
+.density-compact .space-y-3 > * + * { margin-top: calc(var(--spacing-unit) * 3); }
+.density-compact .space-y-4 > * + * { margin-top: calc(var(--spacing-unit) * 4); }
+.density-compact .space-y-6 > * + * { margin-top: calc(var(--spacing-unit) * 6); }
+
+.density-comfortable .space-y-1 > * + * { margin-top: calc(var(--spacing-unit) * 1); }
+.density-comfortable .space-y-2 > * + * { margin-top: calc(var(--spacing-unit) * 2); }
+.density-comfortable .space-y-3 > * + * { margin-top: calc(var(--spacing-unit) * 3); }
+.density-comfortable .space-y-4 > * + * { margin-top: calc(var(--spacing-unit) * 4); }
+.density-comfortable .space-y-6 > * + * { margin-top: calc(var(--spacing-unit) * 6); }
+
+.density-spacious .space-y-1 > * + * { margin-top: calc(var(--spacing-unit) * 1); }
+.density-spacious .space-y-2 > * + * { margin-top: calc(var(--spacing-unit) * 2); }
+.density-spacious .space-y-3 > * + * { margin-top: calc(var(--spacing-unit) * 3); }
+.density-spacious .space-y-4 > * + * { margin-top: calc(var(--spacing-unit) * 4); }
+.density-spacious .space-y-6 > * + * { margin-top: calc(var(--spacing-unit) * 6); }
