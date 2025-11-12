@@ -1,0 +1,178 @@
+{
+    "610F2": {
+      "description": "EGR Switch MAYBE",
+      "dimensions": "8x16"
+    },
+    "61E9C": {
+      "description": "EGR",
+      "dimensions": "16x16"
+    },
+    "62120": {
+      "description": "SVRL MAYBE",
+      "dimensions": "1x1"
+    },
+    "62136": {
+      "description": "SVRL MAYBE",
+      "dimensions": "3"
+    },
+    "62152": {
+      "description": "SVRL MAYBE",
+      "dimensions": "4"
+    },
+    "6215E": {
+      "description": "SVRL MAYBE",
+      "dimensions": "5"
+    },
+    "62190": {
+      "description": "SVRL MAYBE",
+      "dimensions": "6"
+    },
+    "6219A": {
+      "description": "SVRL MAYBE",
+      "dimensions": "7"
+    },
+    "6241A": {
+      "description": "Injection Duration 1",
+      "dimensions": "20x16"
+    },
+    "62E7A": {
+      "description": "Map \"Bosch II 16\"",
+      "dimensions": null
+    },
+    "62E7E": {
+      "description": "Map \"Bosch II 16\"",
+      "dimensions": null
+    },
+    "638C8": {
+      "description": "Boost Limiter Boost vs Air Temp",
+      "dimensions": "10x10"
+    },
+    "63A0C": {
+      "description": "Map \"Bosch II 16\"",
+      "dimensions": null
+    },
+    "6707A": {
+      "description": "N75-1",
+      "dimensions": "10x16"
+    },
+    "672C4": {
+      "description": "N75-2",
+      "dimensions": "10x16"
+    },
+    "67460": {
+      "description": "N75-3 MAYBE",
+      "dimensions": "10x16"
+    },
+    "67830": {
+      "description": "Boost Limiter 2",
+      "dimensions": "10x10"
+    },
+    "67A14": {
+      "description": "Turbo 1",
+      "dimensions": "10x16"
+    },
+    "67B90": {
+      "description": "Turbo 2",
+      "dimensions": "10x16"
+    },
+    "67D3C": {
+      "description": "Map \"Bosch II 16\"",
+      "dimensions": null
+    },
+    "67F7A": {
+      "description": "IQ Limiter - Fuel Temp 1",
+      "dimensions": "4x8"
+    },
+    "68024": {
+      "description": "IQ Limiter - Fuel Temp 2",
+      "dimensions": "6x8"
+    },
+    "6832C": {
+      "description": "Map",
+      "dimensions": "19x1"
+    },
+    "68468": {
+      "description": "Smoke Limiter MAF",
+      "dimensions": "16x16"
+    },
+    "68B68": {
+      "description": "Drivers Wish 1",
+      "dimensions": "6x8"
+    },
+    "68BEC": {
+      "description": "Drivers Wish 2",
+      "dimensions": "6x8"
+    },
+    "68EE8": {
+      "description": "TORQUE MAP MIGHT BE",
+      "dimensions": "8x8"
+    },
+    "6AFC2": {
+      "description": "Map \"Bosch II 16\"",
+      "dimensions": null
+    },
+    "6B42E": {
+      "description": "Injection Duration 2",
+      "dimensions": "20x16"
+    },
+    "7241A": {
+      "description": "Injection Duration 1",
+      "dimensions": "20x16"
+    },
+    "741B4": {
+      "description": "Map \"Bosch II 16\"",
+      "dimensions": null
+    },
+    "76B3C": {
+      "description": "SVBL MAYBE",
+      "dimensions": "1x1"
+    },
+    "7707A": {
+      "description": "N 75-1",
+      "dimensions": "10x16"
+    },
+    "772C4": {
+      "description": "N 75-2",
+      "dimensions": "10x16"
+    },
+    "77460": {
+      "description": "N 75-3",
+      "dimensions": "10x16"
+    },
+    "77830": {
+      "description": "Boost Limiter 2",
+      "dimensions": "10x10"
+    },
+    "77A14": {
+      "description": "Turbo 1",
+      "dimensions": "10x16"
+    },
+    "77B90": {
+      "description": "Turbo 2",
+      "dimensions": "10x16"
+    },
+    "77D3C": {
+      "description": "Map \"Bosch II 16\"",
+      "dimensions": null
+    },
+    "77F7A": {
+      "description": "IQ Limiter - Fuel Temp 1",
+      "dimensions": "4x8"
+    },
+    "78024": {
+      "description": "IQ Limiter - Fuel Temp 2",
+      "dimensions": "6x8"
+    },
+    "78468": {
+      "description": "Smoke Limiter MAF",
+      "dimensions": "16x16"
+    },
+    "78B68": {
+      "description": "Drivers Wish 1",
+      "dimensions": "6x8"
+    },
+    "78BEC": {
+      "description": "Drivers Wish 2",
+      "dimensions": "6x8"
+    }
+  }
