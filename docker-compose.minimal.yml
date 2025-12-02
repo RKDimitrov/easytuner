@@ -1,0 +1,107 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: easytuner-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: easytuner
+      POSTGRES_USER: easytuner
+      POSTGRES_PASSWORD: password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easytuner -d easytuner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - easytuner-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: easytuner-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - easytuner-network
+
+  # Backend API Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    container_name: easytuner-server
+    restart: unless-stopped
+    command: poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://easytuner:password@postgres:5432/easytuner
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - JWT_SECRET_KEY=easytuner_dev_secret_key_9a8b7c6d5e4f3g2h1i0j9k8l7m6n5o4p3q2r1s0t9u8v7w6x5y4z3a2b1c0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./server:/app
+      - /app/.venv
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - easytuner-network
+
+  # Frontend Client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: easytuner-client
+    restart: unless-stopped
+    command: npm run dev -- --host --port 3000
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_ENV=development
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    networks:
+      - easytuner-network
+
+# Named Volumes
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Networks
+networks:
+  easytuner-network:
+    driver: bridge
+

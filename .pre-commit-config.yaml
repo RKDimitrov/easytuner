@@ -1,0 +1,151 @@
+# Pre-commit hooks for EasyTuner
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # General hooks for all files
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+        args: [--safe]
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-case-conflict
+        name: Check for case conflicts
+      - id: detect-private-key
+        name: Detect private keys
+      - id: mixed-line-ending
+        name: Fix mixed line endings
+        args: [--fix=lf]
+
+  # Python-specific hooks (Backend)
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        name: Format Python code with Black
+        language_version: python3.11
+        args: [--line-length=100]
+        files: ^backend/
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        name: Lint Python with Ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^backend/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Sort Python imports
+        args: [--profile=black, --line-length=100]
+        files: ^backend/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        name: Type check with mypy
+        additional_dependencies: [types-all]
+        args: [--ignore-missing-imports, --python-version=3.11]
+        files: ^backend/app/
+        exclude: ^backend/tests/
+
+  # JavaScript/TypeScript hooks (Frontend)
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        name: Format with Prettier
+        files: \.(js|jsx|ts|tsx|css|scss|json|md|yaml|yml)$
+        exclude: ^backend/
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.56.0
+    hooks:
+      - id: eslint
+        name: Lint with ESLint
+        files: \.(js|jsx|ts|tsx)$
+        types: [file]
+        args: [--fix, --max-warnings=0]
+        additional_dependencies:
+          - eslint@8.56.0
+          - eslint-config-airbnb@19.0.4
+          - eslint-config-prettier@9.1.0
+          - eslint-plugin-react@7.33.2
+          - eslint-plugin-react-hooks@4.6.0
+          - '@typescript-eslint/eslint-plugin@6.17.0'
+          - '@typescript-eslint/parser@6.17.0'
+
+  # Security checks
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: package-lock.json|yarn.lock|pnpm-lock.yaml|poetry.lock
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        name: Lint Markdown files
+        args: [--fix]
+        exclude: ^docs/
+
+  # Dockerfile linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        name: Lint Dockerfiles
+        args: [--ignore, DL3008, --ignore, DL3013]
+
+  # Shell script checks
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        name: Check shell scripts
+
+# Configuration for specific hooks
+default_language_version:
+  python: python3.11
+  node: 18.0.0
+
+# Files to exclude from all hooks
+exclude: |
+  (?x)^(
+    .*\.min\.(js|css)|
+    .*\.bundle\.(js|css)|
+    .*/vendor/.*|
+    .*/node_modules/.*|
+    .*/migrations/.*|
+    .*\.lock
+  )$
+
+# Fail fast on first error
+fail_fast: false
+
+# Minimum pre-commit version
+minimum_pre_commit_version: '3.0.0'
+

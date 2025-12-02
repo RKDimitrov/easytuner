@@ -1,0 +1,100 @@
+# Frontend (Node.js/React) .gitignore
+# =====================================
+
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+.nyc_output/
+
+# Production build
+/build
+/dist
+/.next
+/out
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Vercel
+.vercel
+
+# Vite
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Storybook
+storybook-static/
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ESLint
+.eslintcache
+
+# Stylelint
+.stylelintcache
+
+# Package manager locks
+# We use npm, so package-lock.json is tracked
+yarn.lock
+pnpm-lock.yaml
+
+# Turbo
+.turbo
+
+# Bundle analyzer
+.next/analyze/
+
+# PWA
+**/public/workbox-*.js
+**/public/sw.js
+**/public/worker-*.js
+
+# Temporary files
+*.tmp
+.cache/
+
+# Source maps (optional - uncomment if you don't want them in git)
+# *.map
+
