@@ -19,6 +19,9 @@ import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+# Add server directory to Python path so we can import ecumap
+sys.path.insert(0, str(Path(__file__).parent / "server"))
+
 # Import segmentation, interpretation, metrics, and scoring modules
 from ecumap.segmentation import (
     SegmentationConfig,

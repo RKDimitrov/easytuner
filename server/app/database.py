@@ -2,6 +2,7 @@
 
 from typing import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
@@ -62,6 +63,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db() -> None:
     """Initialize database tables (for development only)."""
     async with engine.begin() as conn:
+        # Enable pg_trgm extension for fuzzy text search (required for GIN indexes)
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
 
