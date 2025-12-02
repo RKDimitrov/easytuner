@@ -99,6 +99,74 @@ class AuthService:
 
         return user
 
+    async def register_and_authenticate_user(
+        self,
+        registration: UserRegistration,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        tos_version: int = 1
+    ) -> TokenResponse:
+        """Register a new user and immediately authenticate them.
+
+        Args:
+            registration: User registration data
+            ip_address: Client IP address (optional)
+            user_agent: Client user agent (optional)
+            tos_version: Version of Terms of Service (default: 1)
+
+        Returns:
+            TokenResponse with access and refresh tokens
+
+        Raises:
+            HTTPException:
+                - 400: Password is too weak or email already registered
+        """
+        # Register the user
+        user = await self.register_user(registration, tos_version)
+
+        # Update last login timestamp
+        user.last_login_at = datetime.utcnow()
+
+        # Create access and refresh tokens
+        access_token = create_access_token({
+            "sub": str(user.user_id),
+            "email": user.email,
+            "role": user.role,
+        })
+
+        refresh_token = create_refresh_token(str(user.user_id))
+
+        # Hash refresh token for storage (using SHA-256)
+        refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+
+        # Calculate session expiration (same as refresh token expiration)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+
+        # Create session record
+        session = Session(
+            user_id=user.user_id,
+            refresh_token_hash=refresh_token_hash,
+            expires_at=expires_at,
+            ip_address=ip_address or "unknown",
+            user_agent=user_agent or "unknown",
+        )
+
+        try:
+            self.db.add(session)
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create session: {str(e)}"
+            )
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer"
+        )
+
     async def authenticate_user(
         self,
         email: str,

@@ -43,7 +43,7 @@ This platform is designed for **research and educational purposes only**.
 
 ```
 ┌─────────────┐
-│  React SPA  │  TypeScript, Redux Toolkit, Material-UI
+│  React SPA  │  TypeScript, Zustand, Material-UI
 └──────┬──────┘
        │
 ┌──────▼──────┐
@@ -61,7 +61,7 @@ This platform is designed for **research and educational purposes only**.
 
 **Technology Stack:**
 - **Server**: FastAPI, SQLAlchemy, Alembic, Celery, NumPy, SciPy
-- **Client**: React 18, TypeScript, Redux Toolkit, MUI
+- **Client**: React 18, TypeScript, Zustand, MUI
 - **Database**: PostgreSQL 15+, Redis 7+
 - **Storage**: MinIO (for file uploads)
 - **Infrastructure**: Docker
@@ -88,57 +88,104 @@ git clone https://github.com/your-org/easytuner.git
 cd easytuner
 ```
 
-### 2. Start Infrastructure Services
+### 2. Start Backend Services (Docker)
 
 ```bash
-# Start minimal setup (PostgreSQL + Redis + Server + Client)
+# Start PostgreSQL, Redis, and Backend Server
 docker-compose up -d
 
-# This is enough for authentication, database, and API development
-# See DOCKER_SETUP.md for full setup with MinIO, Celery, monitoring
+# This starts:
+# - PostgreSQL on port 5432
+# - Redis on port 6379
+# - Backend API on port 8000
 ```
 
-### 3. Access the Application
+### 3. Set Up Frontend (Local)
 
-**That's it!** Docker Compose handles everything.
+```bash
+# Navigate to client directory
+cd client
+
+# Install dependencies
+npm install
+
+# Copy environment file
+cp env.example .env
+
+# Start development server
+npm run dev
+```
+
+The frontend will be available at **http://localhost:3000**
+
+### 4. Access the Application
 
 - **Client UI**: http://localhost:3000
 - **Server API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
-### 4. For Local Development (Optional)
-
-If you want to run outside Docker:
-
-```bash
-# Server
-cd server
-pip install poetry
-poetry install
-poetry run uvicorn app.main:app --reload
-
-# Client
-cd client
-npm install
-npm run dev
-```
-
 ---
 
-## 📚 Documentation
+## 🔧 Development Setup
 
-**Quick Start:**
-- **[Current Status](./CURRENT_STATUS.md)**: Where we are now ← START HERE
-- **[MVP Plan](./docs/MVP_PLAN.md)**: Simplified roadmap
-- **[Docker Setup](./DOCKER_SETUP.md)**: How to run locally
+### Backend (Running in Docker)
 
-**Reference:**
-- **[API Endpoints](./docs/API_ENDPOINTS_REFERENCE.md)**: API specification
-- **[Stories](./docs/stories/)**: Implementation tasks
-- **[Contributing](./CONTRIBUTING.md)**: How to contribute
+The backend runs in Docker with hot-reload enabled. Code changes in `server/` are automatically reflected.
 
-**Original Specs (Reference Only):**
-- [PRD](./docs/PRD.md), [Technical Architecture](./docs/TECHNICAL_ARCHITECTURE.md)
+**Useful Commands:**
+```bash
+# View backend logs
+docker-compose logs -f server
+
+# Restart backend
+docker-compose restart server
+
+# Access database
+docker-compose exec postgres psql -U easytuner -d easytuner
+
+# Stop all services
+docker-compose down
+```
+
+### Frontend (Running Locally)
+
+The frontend runs locally with npm for easier development.
+
+**Useful Commands:**
+```bash
+cd client
+
+# Start dev server
+npm run dev
+
+# Build for production
+npm run build
+
+# Type check
+npm run type-check
+
+# Lint code
+npm run lint
+
+# Format code
+npm run format
+```
+
+### Environment Configuration
+
+**Backend** (`server/.env`):
+```env
+DATABASE_URL=postgresql+asyncpg://easytuner:password@localhost:5432/easytuner
+REDIS_URL=redis://localhost:6379/0
+JWT_SECRET_KEY=your-secret-key-here
+CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
+```
+
+**Frontend** (`client/.env`):
+```env
+VITE_API_URL=http://localhost:8000
+VITE_ENV=development
+```
 
 ---
 
@@ -157,10 +204,42 @@ npm test
 npm run test:coverage
 ```
 
-### End-to-End Tests
-```bash
-npm run playwright test
+---
+
+## 📚 Project Structure
+
 ```
+easytuner/
+├── client/              # React frontend application
+│   ├── src/
+│   │   ├── components/  # UI components
+│   │   ├── pages/       # Page components
+│   │   ├── services/    # API clients
+│   │   ├── store/       # State management
+│   │   └── types/       # TypeScript types
+│   └── package.json
+├── server/              # FastAPI backend
+│   ├── app/
+│   │   ├── routers/     # API routes
+│   │   ├── models/      # Database models
+│   │   ├── schemas/     # Pydantic schemas
+│   │   ├── services/    # Business logic
+│   │   └── auth/        # Authentication
+│   └── pyproject.toml
+├── docker-compose.yml   # Docker services (backend only)
+└── README.md
+```
+
+---
+
+## 🔐 Security
+
+- JWT-based authentication with bcrypt password hashing
+- CORS configuration for secure cross-origin requests
+- Audit logging for user actions
+- Rate limiting on API endpoints
+
+**Report security vulnerabilities**: Create a GitHub issue
 
 ---
 
@@ -175,47 +254,15 @@ We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for:
 
 ---
 
-## 📊 Project Status
-
-**Current Version:** 0.1.0 (Early Development)  
-**MVP Target:** Working demo in ~10 days
-
-### Epic Progress
-- ✅ Epic 01: Project Setup (Complete)
-- 🔄 Epic 02: Database Models (In Progress - Story 03)
-- ⏳ Epic 03: Authentication
-- ⏳ Epic 04: File Upload
-- ⏳ Epic 05: Detection Pipeline
-- ⏳ Epic 06-08: API & UI
-
-See [CURRENT_STATUS.md](./CURRENT_STATUS.md) for what's next.
-
----
-
-## 🔐 Security
-
-- JWT-based authentication with bcrypt password hashing
-- Audit logging for user actions
-
-**Report security vulnerabilities**: Create a GitHub issue
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 👥 Contributors
-
-See [GitHub Contributors](https://github.com/your-org/easytuner/graphs/contributors)
-
----
-
 ## 📞 Support
 
-- **Documentation**: [docs/](./docs/)
+- **Documentation**: See `client/README.md` and `server/README.md` for detailed setup
 - **Issues**: [GitHub Issues](https://github.com/your-org/easytuner/issues)
 
 ---
@@ -232,4 +279,3 @@ Inspired by professional automotive tuning tools like WinOLS, this project aims 
 ---
 
 **Built with ❤️ for researchers, educators, and automotive enthusiasts.**
-

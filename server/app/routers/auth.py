@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
@@ -19,30 +19,39 @@ router = APIRouter(
 
 @router.post(
     "/register",
-    response_model=UserResponse,
+    response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register new user",
-    description="Create a new user account with email and password",
+    description="Create a new user account and receive access and refresh tokens",
 )
 async def register(
     registration: UserRegistration,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> UserResponse:
-    """Register a new user account.
+) -> TokenResponse:
+    """Register a new user account and authenticate them.
 
     Args:
         registration: User registration data (email, password, tos_accepted)
+        request: FastAPI request object (for IP and user agent)
         db: Database session
 
     Returns:
-        Created user information
+        Access and refresh tokens
 
     Raises:
         400: If password is weak, email is already registered, or TOS not accepted
     """
+    # Extract client information
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
     auth_service = AuthService(db)
-    user = await auth_service.register_user(registration)
-    return UserResponse.model_validate(user)
+    return await auth_service.register_and_authenticate_user(
+        registration=registration,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
 
 
 @router.post(

@@ -1,9 +1,10 @@
 """Application configuration."""
 
+import json
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field, PostgresDsn, RedisDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -72,6 +73,19 @@ class Settings(BaseSettings):
     upload_dir: str = "/app/uploads"  # Directory for storing uploaded files
     max_upload_size_mb: int = 16
     allowed_file_extensions: list[str] = [".bin", ".hex"]
+    
+    @field_validator("cors_origins", "cors_allow_methods", "cors_allow_headers", "allowed_file_extensions", mode="before")
+    @classmethod
+    def parse_json_list(cls, v):
+        """Parse JSON string to list if needed."""
+        if isinstance(v, str):
+            # Try to parse as JSON first
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # If not JSON, try comma-separated values
+                return [item.strip() for item in v.split(",") if item.strip()]
+        return v
     
     # Rate Limiting
     rate_limit_uploads_per_hour: int = 100
