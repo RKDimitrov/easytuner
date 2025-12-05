@@ -17,7 +17,7 @@ import {
   createProject as createProjectApi,
   updateProject as updateProjectApi,
   deleteProject as deleteProjectApi,
-} from '../services/mockProjectService'
+} from '../services/projectService'
 
 interface ProjectState {
   // State

@@ -1,14 +1,15 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAnalysisStore } from '../store/analysisStore'
 import { useUploadStore } from '../store/uploadStore'
 import { useProjectStore } from '../store/projectStore'
+import { useAuthStore } from '../store/authStore'
 import { formatBytes } from '../lib/utils'
 import { toast } from '../hooks/use-toast'
+import { uploadFile } from '../services/fileService'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Progress } from '../components/ui/progress'
-import { TOSModal } from '../components/TOSModal'
 import { ProjectSelector } from '../components/ProjectSelector'
 import { Header } from '../components/Header'
 import { Upload as UploadIcon, FileCode, Zap, AlertCircle } from 'lucide-react'
@@ -18,13 +19,13 @@ const MAX_FILE_SIZE = 16 * 1024 * 1024 // 16MB
 export function Upload() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { setFileData, tosAccepted, legalAttestation, setTosAccepted, setLegalAttestation } = useAnalysisStore()
+  const { setFileData } = useAnalysisStore()
   const { selectedProject, setSelectedProject, isUploading, uploadProgress, uploadError, setIsUploading, setUploadProgress, setUploadError, associateFileWithProject } = useUploadStore()
   const { projects, fetchProjects } = useProjectStore()
+  const { isAuthenticated, accessToken } = useAuthStore()
   
   const [isDragging, setIsDragging] = useState(false)
-  const [showTOSModal, setShowTOSModal] = useState(false)
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Handle project context from URL parameters
   useEffect(() => {
@@ -43,7 +44,16 @@ export function Upload() {
     fetchProjects()
   }, [fetchProjects])
 
-  const handleFileUpload = useCallback((file: File) => {
+  const handleFileUpload = useCallback(async (file: File) => {
+    // Check authentication first
+    if (!isAuthenticated || !accessToken) {
+      toast.error('Authentication required', {
+        description: 'Please log in to upload files.'
+      })
+      navigate('/login', { state: { from: '/upload' } })
+      return
+    }
+
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       toast.error('File too large', {
@@ -52,10 +62,11 @@ export function Upload() {
       return
     }
 
-    // Check TOS acceptance
-    if (!tosAccepted || !legalAttestation) {
-      setPendingFile(file)
-      setShowTOSModal(true)
+    // Check if project is selected (required for upload)
+    if (!selectedProject) {
+      toast.error('Project required', {
+        description: 'Please select a project before uploading a file.'
+      })
       return
     }
 
@@ -64,65 +75,76 @@ export function Upload() {
     setUploadProgress(0)
     setUploadError(null)
 
-    // Simulate upload progress
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(progressInterval)
-          return 90
-        }
-        return prev + Math.random() * 20
-      })
-    }, 200)
-
-    // Read file
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      clearInterval(progressInterval)
-      setUploadProgress(100)
-      
-      const data = new Uint8Array(e.target?.result as ArrayBuffer)
-      setFileData(data, file.name)
-      
-      // Associate file with project if one is selected
-      if (selectedProject) {
-        await associateFileWithProject(file.name)
+    try {
+      // Validate project_id is a valid UUID
+      if (!selectedProject?.project_id) {
+        throw new Error('Invalid project selected')
       }
       
-      // Show success message with project context
-      const projectContext = selectedProject 
-        ? ` to project "${selectedProject.name}"`
-        : ' (no project selected)'
-      
-      toast.success('File loaded successfully', {
-        description: `${file.name} (${formatBytes(file.size)})${projectContext}`
-      })
-      
-      setIsUploading(false)
-      navigate('/analysis')
-    }
-    reader.onerror = () => {
-      clearInterval(progressInterval)
-      setIsUploading(false)
-      setUploadError('Failed to read file')
-      toast.error('Failed to read file', {
-        description: 'Please try again or use a different file.'
-      })
-    }
-    reader.readAsArrayBuffer(file)
-  }, [tosAccepted, legalAttestation, setFileData, navigate, selectedProject, setIsUploading, setUploadProgress, setUploadError])
+      // Upload file to backend
+      const uploadResponse = await uploadFile(
+        selectedProject.project_id,
+        file,
+        (progress) => {
+          setUploadProgress(progress)
+        }
+      )
 
-  const handleTOSAccept = () => {
-    setTosAccepted(true)
-    setLegalAttestation(true)
-    setShowTOSModal(false)
-    
-    // Process pending file
-    if (pendingFile) {
-      handleFileUpload(pendingFile)
-      setPendingFile(null)
+      // Read file for local display
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        setFileData(data, file.name, uploadResponse.file_id)
+        
+        // Show success message
+        const duplicateMsg = uploadResponse.duplicate ? ' (duplicate file, using existing)' : ''
+        toast.success('File uploaded successfully', {
+          description: `${file.name} (${formatBytes(file.size)}) uploaded to project "${selectedProject.name}"${duplicateMsg}`
+        })
+        
+        setIsUploading(false)
+        
+        // Refresh projects to update file count
+        fetchProjects()
+        
+        // Navigate to analysis page to view the hex
+        navigate('/analysis')
+      }
+      reader.onerror = () => {
+        setIsUploading(false)
+        setUploadError('Failed to read file for display')
+        toast.error('Upload succeeded but failed to read file', {
+          description: 'The file was uploaded but could not be displayed. You can still view it in the project.'
+        })
+      }
+      reader.readAsArrayBuffer(file)
+    } catch (error) {
+      setIsUploading(false)
+      let errorMessage = 'Failed to upload file'
+      
+      console.error('Upload error:', error)
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+        // Check for authentication errors
+        if (errorMessage.includes('401') || errorMessage.includes('403') || errorMessage.includes('Not authenticated') || errorMessage.includes('Unauthorized')) {
+          errorMessage = 'Authentication required. Please log in again.'
+          // Redirect to login after a short delay
+          setTimeout(() => {
+            navigate('/login', { state: { from: '/upload' } })
+          }, 2000)
+        }
+      } else if (typeof error === 'object' && error !== null) {
+        // Handle case where error might be an object
+        errorMessage = JSON.stringify(error)
+      }
+      
+      setUploadError(errorMessage)
+      toast.error('Upload failed', {
+        description: errorMessage
+      })
     }
-  }
+  }, [isAuthenticated, accessToken, setFileData, navigate, selectedProject, setIsUploading, setUploadProgress, setUploadError, fetchProjects])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -144,20 +166,24 @@ export function Upload() {
     setIsDragging(false)
   }, [])
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      console.log('File selected:', file.name, file.size)
       handleFileUpload(file)
+      // Reset the input after a delay to allow the file dialog to close
+      // This allows selecting the same file again
+      setTimeout(() => {
+        if (e.target) {
+          e.target.value = ''
+        }
+      }, 200)
+    } else {
+      console.log('No file selected')
     }
-  }
+  }, [handleFileUpload])
 
   const generateMockFirmware = async () => {
-    // Check TOS
-    if (!tosAccepted || !legalAttestation) {
-      setShowTOSModal(true)
-      return
-    }
-
     toast.info('Generating demo firmware...', {
       description: 'Creating synthetic ECU firmware for testing'
     })
@@ -251,7 +277,10 @@ export function Upload() {
           <CardHeader>
             <CardTitle>Upload Firmware File</CardTitle>
             <CardDescription>
-              Drag and drop a binary file or click to browse (Max: {formatBytes(MAX_FILE_SIZE)})
+              {selectedProject 
+                ? `Drag and drop a binary file or click to browse (Max: ${formatBytes(MAX_FILE_SIZE)})`
+                : 'Please select a project above before uploading a file'
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -283,29 +312,69 @@ export function Upload() {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-                isUploading 
+                isUploading || !selectedProject
                   ? 'border-muted bg-muted/50 cursor-not-allowed'
                   : isDragging
                     ? 'border-primary bg-primary/10 cursor-pointer'
                     : 'border-border hover:border-primary/50 hover:bg-accent/50 cursor-pointer'
               }`}
-              onClick={() => !isUploading && document.getElementById('file-input')?.click()}
+              onClick={(e) => {
+                // Only trigger if clicking directly on the drop zone, not on child elements
+                if (e.target === e.currentTarget) {
+                  e.preventDefault()
+                  if (!isUploading && selectedProject && fileInputRef.current) {
+                    fileInputRef.current.click()
+                  }
+                }
+              }}
             >
               <UploadIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-lg mb-2">
                 {isDragging ? 'Drop file here' : 'Drag and drop your firmware file here'}
               </p>
               <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
-              <Button variant="outline">
+              <Button 
+                variant="outline"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  console.log('Select File button clicked', { 
+                    isUploading, 
+                    selectedProject: !!selectedProject, 
+                    hasRef: !!fileInputRef.current,
+                    inputDisabled: fileInputRef.current?.disabled 
+                  })
+                  if (!isUploading && selectedProject && fileInputRef.current) {
+                    // Ensure the input is enabled before clicking
+                    if (fileInputRef.current.disabled) {
+                      console.warn('File input is disabled, enabling it temporarily')
+                      fileInputRef.current.disabled = false
+                    }
+                    try {
+                      fileInputRef.current.click()
+                      console.log('File input click triggered')
+                    } catch (error) {
+                      console.error('Error clicking file input:', error)
+                    }
+                  } else {
+                    console.warn('Cannot open file dialog:', { isUploading, selectedProject: !!selectedProject, hasRef: !!fileInputRef.current })
+                  }
+                }}
+                disabled={!selectedProject || isUploading}
+              >
                 <FileCode className="w-4 h-4 mr-2" />
                 Select File
               </Button>
               <input
+                ref={fileInputRef}
                 id="file-input"
                 type="file"
                 className="hidden"
                 onChange={handleFileInput}
                 accept=".bin,.hex,.ecu,.dat"
+                disabled={!selectedProject || isUploading}
+                style={{ display: 'none' }}
               />
             </div>
 
@@ -348,14 +417,8 @@ export function Upload() {
               <p>❌ NO modification of production vehicle ECUs without authorization</p>
               <p>❌ NO tampering with emissions systems</p>
             </div>
-            <p className="text-muted-foreground mt-3">
-              You will be required to accept Terms of Service and provide legal attestation before uploading files.
-            </p>
           </CardContent>
         </Card>
-        
-        {/* TOS Modal */}
-        <TOSModal open={showTOSModal} onAccept={handleTOSAccept} />
       </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { Upload } from './pages/Upload'
 import { Analysis } from './pages/Analysis'
 import { Login } from './pages/Login'
@@ -11,7 +11,6 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { setupAuthInterceptor } from './store/authStore'
 import { initializeSettings } from './store/settingsStore'
-import { initializeSampleProjects } from './services/mockProjectService'
 
 function App() {
   // Setup axios interceptor for automatic token handling
@@ -19,16 +18,15 @@ function App() {
     setupAuthInterceptor()
     // Initialize settings (theme, etc.)
     initializeSettings()
-    // Initialize sample projects for demo purposes
-    initializeSampleProjects()
   }, [])
 
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/" element={<Navigate to="/projects" replace />} />
       <Route
-        path="/"
+        path="/upload"
         element={
           <ProtectedRoute>
             <Upload />

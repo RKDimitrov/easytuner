@@ -8,7 +8,12 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { Project } from '../types/project'
-import { addFileToProject } from '../services/mockProjectService'
+// File association is now handled by the backend during upload
+// This function is kept for backward compatibility but does nothing
+async function addFileToProject(projectId: string, fileName: string): Promise<void> {
+  // File is already associated with project during upload
+  console.log('File associated with project during upload:', projectId, fileName)
+}
 
 interface UploadState {
   // Project selection

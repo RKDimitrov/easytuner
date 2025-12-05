@@ -51,8 +51,7 @@ function ProjectHeader({ project }: { project: Project }) {
   }
 
   const handleUploadFile = () => {
-    // TODO: Navigate to upload with project context (Epic 08 Story 05)
-    navigate(`/?project=${project.project_id}`)
+    navigate(`/upload?project=${project.project_id}`)
   }
 
   return (
@@ -126,6 +125,7 @@ function ProjectHeader({ project }: { project: Project }) {
  * Files Tab Content
  */
 function FilesTab({ project }: { project: Project }) {
+  const navigate = useNavigate()
   const fileCount = project.file_count || 0
 
   if (fileCount === 0) {
@@ -136,7 +136,7 @@ function FilesTab({ project }: { project: Project }) {
         <p className="text-muted-foreground mb-6 max-w-md mx-auto">
           Upload your first firmware file to get started with analysis
         </p>
-        <Button onClick={() => window.location.href = `/?project=${project.project_id}`}>
+        <Button onClick={() => navigate(`/upload?project=${project.project_id}`)}>
           <Upload className="w-4 h-4 mr-2" />
           Upload First File
         </Button>

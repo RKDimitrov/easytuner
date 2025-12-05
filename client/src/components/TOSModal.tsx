@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,14 @@ interface TOSModalProps {
 export function TOSModal({ open, onAccept }: TOSModalProps) {
   const [tosChecked, setTosChecked] = useState(false)
   const [legalChecked, setLegalChecked] = useState(false)
+
+  // Reset checkboxes when modal opens
+  useEffect(() => {
+    if (open) {
+      setTosChecked(false)
+      setLegalChecked(false)
+    }
+  }, [open])
 
   const handleAccept = () => {
     if (tosChecked && legalChecked) {

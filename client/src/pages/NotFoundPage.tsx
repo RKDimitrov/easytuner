@@ -19,7 +19,7 @@ export function NotFoundPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
-          <Button onClick={() => navigate('/')}>
+          <Button onClick={() => navigate('/projects')}>
             <Home className="w-4 h-4 mr-2" />
             Back to Home
           </Button>

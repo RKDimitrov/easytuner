@@ -40,7 +40,7 @@ export function Analysis() {
       toast.error('No file loaded', {
         description: 'Please upload a file first'
       })
-      navigate('/')
+      navigate('/upload')
     }
   }, [fileData, navigate])
 
@@ -170,7 +170,7 @@ export function Analysis() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/upload')}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back

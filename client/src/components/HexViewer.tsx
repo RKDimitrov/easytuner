@@ -1,18 +1,24 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAnalysisStore } from '../store/analysisStore'
+import { downloadFile } from '../services/fileService'
 import { formatHexOffset, byteToHex, isPrintableAscii, cn } from '../lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { toast } from '../hooks/use-toast'
 
 const BYTES_PER_ROW = 16
 
 export function HexViewer() {
   const fileData = useAnalysisStore((state) => state.fileData)
+  const fileId = useAnalysisStore((state) => state.fileId)
+  const fileName = useAnalysisStore((state) => state.fileName)
+  const setFileData = useAnalysisStore((state) => state.setFileData)
   const selectedCandidate = useAnalysisStore((state) => state.selectedCandidate)
   const bookmarks = useAnalysisStore((state) => state.bookmarks)
   const annotations = useAnalysisStore((state) => state.annotations)
   
   const parentRef = useRef<HTMLDivElement>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   // Calculate total rows
   const totalRows = fileData ? Math.ceil(fileData.length / BYTES_PER_ROW) : 0
@@ -53,19 +59,43 @@ export function HexViewer() {
     return 'text-muted-foreground'
   }
 
+  // Fetch file from backend if fileId exists but fileData doesn't
+  useEffect(() => {
+    if (fileId && !fileData && !isLoading) {
+      setIsLoading(true)
+      downloadFile(fileId)
+        .then((arrayBuffer) => {
+          const data = new Uint8Array(arrayBuffer)
+          setFileData(data, fileName || 'file.bin', fileId)
+          setIsLoading(false)
+        })
+        .catch((error) => {
+          console.error('Failed to load file:', error)
+          toast.error('Failed to load file', {
+            description: error instanceof Error ? error.message : 'Could not load file from server'
+          })
+          setIsLoading(false)
+        })
+    }
+  }, [fileId, fileData, fileName, setFileData, isLoading])
+
   // Auto-scroll to selected candidate
   useEffect(() => {
-    if (selectedCandidate && parentRef.current) {
+    if (selectedCandidate && parentRef.current && fileData) {
       const row = Math.floor(selectedCandidate.offset / BYTES_PER_ROW)
       rowVirtualizer.scrollToIndex(row, { align: 'center' })
     }
-  }, [selectedCandidate, rowVirtualizer])
+  }, [selectedCandidate, rowVirtualizer, fileData])
 
   if (!fileData) {
     return (
       <Card className="h-full flex items-center justify-center">
         <CardContent>
-          <p className="text-muted-foreground">No file loaded</p>
+          {isLoading ? (
+            <p className="text-muted-foreground">Loading file...</p>
+          ) : (
+            <p className="text-muted-foreground">No file loaded</p>
+          )}
         </CardContent>
       </Card>
     )

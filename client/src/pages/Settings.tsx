@@ -58,7 +58,7 @@ export function Settings() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-          <Link to="/" className="hover:text-foreground transition-colors">
+          <Link to="/projects" className="hover:text-foreground transition-colors">
             Home
           </Link>
           <ChevronRight className="h-4 w-4" />

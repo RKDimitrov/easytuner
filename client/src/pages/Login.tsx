@@ -32,7 +32,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false)
 
   // Get the intended destination from location state (set by ProtectedRoute)
-  const from = (location.state as { from?: string })?.from || '/'
+  const from = (location.state as { from?: string })?.from || '/projects'
 
   const {
     register,
@@ -45,7 +45,7 @@ export function Login() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/')
+      navigate('/projects')
     }
   }, [isAuthenticated, navigate])
 

@@ -24,7 +24,17 @@ class FileStorageService:
         Args:
             base_path: Base directory for file storage. If None, uses settings.
         """
-        self.base_path = base_path or Path(settings.upload_dir)
+        if base_path is None:
+            # If upload_dir is relative, make it relative to server root
+            upload_path = Path(settings.upload_dir)
+            if not upload_path.is_absolute():
+                # Get the server directory (parent of app directory)
+                server_root = Path(__file__).parent.parent.parent
+                self.base_path = server_root / upload_path
+            else:
+                self.base_path = upload_path
+        else:
+            self.base_path = base_path
         self._ensure_storage_dir()
     
     def _ensure_storage_dir(self) -> None:

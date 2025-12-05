@@ -70,9 +70,9 @@ class Settings(BaseSettings):
     cors_allow_headers: list[str] = ["*"]
     
     # File Upload
-    upload_dir: str = "/app/uploads"  # Directory for storing uploaded files
+    upload_dir: str = "uploads"  # Directory for storing uploaded files (relative to server root)
     max_upload_size_mb: int = 16
-    allowed_file_extensions: list[str] = [".bin", ".hex"]
+    allowed_file_extensions: list[str] = [".bin", ".hex", ".ecu", ".dat"]
     
     @field_validator("cors_origins", "cors_allow_methods", "cors_allow_headers", "allowed_file_extensions", mode="before")
     @classmethod

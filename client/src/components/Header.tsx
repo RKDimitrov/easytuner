@@ -13,7 +13,7 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between">
         {/* Logo and App Name */}
         <div className="flex items-center gap-6">
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to="/projects" className="flex items-center space-x-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <span className="text-lg font-bold">E</span>
             </div>
@@ -23,7 +23,7 @@ export function Header() {
           {/* Navigation Links */}
           <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
             <Link
-              to="/"
+              to="/upload"
               className="transition-colors hover:text-primary text-foreground/60"
             >
               Upload

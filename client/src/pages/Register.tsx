@@ -67,7 +67,7 @@ export function Register() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/')
+      navigate('/projects')
     }
   }, [isAuthenticated, navigate])
 
@@ -81,7 +81,7 @@ export function Register() {
       toast.success('Welcome to EasyTuner!', {
         description: 'Your account has been created successfully.',
       })
-      navigate('/')
+      navigate('/projects')
     } catch (error) {
       toast.error('Registration failed', {
         description: (error as Error).message || 'Please try again.',

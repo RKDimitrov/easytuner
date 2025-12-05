@@ -33,6 +33,7 @@ interface AnalysisState {
   fileData: Uint8Array | null
   fileName: string
   fileSize: number
+  fileId: string | null  // Backend file ID
   
   // Analysis results
   candidates: MapCandidate[]
@@ -50,7 +51,7 @@ interface AnalysisState {
   scanId: string | null
   
   // Actions
-  setFileData: (data: Uint8Array, name: string) => void
+  setFileData: (data: Uint8Array, name: string, fileId?: string | null) => void
   clearFileData: () => void
   
   setCandidates: (candidates: MapCandidate[]) => void
@@ -77,6 +78,7 @@ const initialState = {
   fileData: null,
   fileName: '',
   fileSize: 0,
+  fileId: null,
   candidates: [],
   selectedCandidate: null,
   bookmarks: [],
@@ -93,16 +95,18 @@ export const useAnalysisStore = create<AnalysisState>()(
     (set) => ({
       ...initialState,
       
-      setFileData: (data, name) => set({
+      setFileData: (data, name, fileId = null) => set({
         fileData: data,
         fileName: name,
         fileSize: data.byteLength,
+        fileId: fileId,
       }),
       
       clearFileData: () => set({
         fileData: null,
         fileName: '',
         fileSize: 0,
+        fileId: null,
         candidates: [],
         selectedCandidate: null,
         bookmarks: [],

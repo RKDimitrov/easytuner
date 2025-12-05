@@ -16,11 +16,14 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const API_PREFIX = '/api/v1'
 
+import { useAuthStore } from '../store/authStore'
+
 /**
- * Get authentication token from localStorage
+ * Get authentication token from auth store
  */
 function getAuthToken(): string | null {
-  return localStorage.getItem('access_token')
+  const { accessToken } = useAuthStore.getState()
+  return accessToken
 }
 
 /**
@@ -28,13 +31,19 @@ function getAuthToken(): string | null {
  */
 function createAuthAxios() {
   const token = getAuthToken()
-  return axios.create({
+  const instance = axios.create({
     baseURL: `${API_BASE_URL}${API_PREFIX}`,
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
     }
   })
+  
+  // Add auth header if token exists
+  if (token) {
+    instance.defaults.headers.common['Authorization'] = `Bearer ${token}`
+  }
+  
+  return instance
 }
 
 /**
@@ -91,7 +100,8 @@ export async function createProject(data: CreateProjectData): Promise<Project> {
     return response.data
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.message || 'Failed to create project')
+      const errorDetail = error.response?.data?.detail || error.response?.data?.message || 'Failed to create project'
+      throw new Error(typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail))
     }
     throw error
   }
@@ -111,7 +121,8 @@ export async function updateProject(
     return response.data
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.message || 'Failed to update project')
+      const errorDetail = error.response?.data?.detail || error.response?.data?.message || 'Failed to update project'
+      throw new Error(typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail))
     }
     throw error
   }
