@@ -94,7 +94,7 @@ export function HexViewer() {
           {isLoading ? (
             <p className="text-muted-foreground">Loading file...</p>
           ) : (
-            <p className="text-muted-foreground">No file loaded</p>
+          <p className="text-muted-foreground">No file loaded</p>
           )}
         </CardContent>
       </Card>

@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { Upload } from './pages/Upload'
 import { Analysis } from './pages/Analysis'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
+import { Dashboard } from './pages/Dashboard'
+import { Library } from './pages/Library'
 import { ProjectDashboard } from './pages/ProjectDashboard'
 import { ProjectDetail } from './pages/ProjectDetail'
 import { Settings } from './pages/Settings'
@@ -24,12 +25,12 @@ function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/" element={<Navigate to="/projects" replace />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route
-        path="/upload"
+        path="/dashboard"
         element={
           <ProtectedRoute>
-            <Upload />
+            <Dashboard />
           </ProtectedRoute>
         }
       />
@@ -46,6 +47,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ProjectDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/library"
+        element={
+          <ProtectedRoute>
+            <Library />
           </ProtectedRoute>
         }
       />

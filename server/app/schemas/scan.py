@@ -43,8 +43,8 @@ class ScanResponse(BaseModel):
     """Response schema for scan job."""
     scan_id: UUID
     file_id: UUID
-    status: str  # 'pending', 'processing', 'completed', 'failed'
-    config: Dict
+    status: str  # 'queued', 'processing', 'completed', 'failed'
+    config: Dict = Field(alias='scan_config')  # Map scan_config from model to config in response
     candidates_found: Optional[int] = None
     processing_time_ms: Optional[int] = None
     error_message: Optional[str] = None
@@ -54,7 +54,8 @@ class ScanResponse(BaseModel):
     updated_at: datetime
     
     model_config = {
-        "from_attributes": True
+        "from_attributes": True,
+        "populate_by_name": True
     }
 
 
@@ -62,17 +63,44 @@ class CandidateResponse(BaseModel):
     """Response schema for a detected candidate."""
     candidate_id: UUID
     scan_id: UUID
-    offset: int
-    size: int
+    offset: int  # Mapped from byte_offset_start
+    size: int  # Calculated from byte_offset_end - byte_offset_start
     data_type: str
     confidence: float
-    pattern_type: str
-    features: Dict
+    pattern_type: str  # Mapped from type
+    features: Dict  # Mapped from feature_scores
     created_at: datetime
     
     model_config = {
-        "from_attributes": True
+        "from_attributes": True,
+        "populate_by_name": True
     }
+    
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        """Override to map Candidate model fields to API response fields."""
+        try:
+            if hasattr(obj, 'byte_offset_start'):
+                # Create a dict with mapped fields
+                data = {
+                    'candidate_id': obj.candidate_id,
+                    'scan_id': obj.scan_id,
+                    'offset': int(obj.byte_offset_start),
+                    'size': int(obj.size_bytes),  # Use property
+                    'data_type': str(obj.data_type),
+                    'confidence': float(obj.confidence),
+                    'pattern_type': str(obj.type),  # Map type to pattern_type
+                    'features': dict(obj.feature_scores) if obj.feature_scores else {},  # Map feature_scores to features
+                    'created_at': obj.created_at,
+                }
+                return cls(**data)
+            return super().model_validate(obj, **kwargs)
+        except Exception as e:
+            # If validation fails, try to get more info
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to validate candidate: {e}, obj type: {type(obj)}, obj: {obj}")
+            raise
 
 
 class ScanResultsResponse(BaseModel):

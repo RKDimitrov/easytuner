@@ -288,3 +288,58 @@ async def get_file_metadata(
         "updated_at": firmware_file.updated_at.isoformat()
     }
 
+
+@router.delete(
+    "/{file_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a firmware file",
+    description="Soft delete a firmware file"
+)
+async def delete_file(
+    file_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Soft delete a firmware file.
+    
+    Args:
+        file_id: UUID of the file to delete
+        current_user: Authenticated user
+        db: Database session
+        
+    Raises:
+        404: If file not found or access denied
+    """
+    # Verify file exists and user has access
+    result = await db.execute(
+        select(FirmwareFile)
+        .join(FirmwareFile.project)
+        .where(
+            FirmwareFile.file_id == file_id,
+            Project.owner_user_id == current_user.user_id,
+            FirmwareFile.deleted_at.is_(None)
+        )
+    )
+    firmware_file = result.scalar_one_or_none()
+    
+    if not firmware_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found or access denied"
+        )
+    
+    try:
+        # Soft delete the file
+        firmware_file.soft_delete()
+        await db.commit()
+        
+        logger.info(f"Deleted file {file_id} for user {current_user.user_id}")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete file {file_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete file"
+        )
+

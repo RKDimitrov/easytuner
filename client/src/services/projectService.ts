@@ -41,7 +41,7 @@ function createAuthAxios() {
   // Add auth header if token exists
   if (token) {
     instance.defaults.headers.common['Authorization'] = `Bearer ${token}`
-  }
+    }
   
   return instance
 }

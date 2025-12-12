@@ -91,33 +91,33 @@ export function Upload() {
       )
 
       // Read file for local display
-      const reader = new FileReader()
+    const reader = new FileReader()
       reader.onload = (e) => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer)
         setFileData(data, file.name, uploadResponse.file_id)
-        
+      
         // Show success message
         const duplicateMsg = uploadResponse.duplicate ? ' (duplicate file, using existing)' : ''
         toast.success('File uploaded successfully', {
           description: `${file.name} (${formatBytes(file.size)}) uploaded to project "${selectedProject.name}"${duplicateMsg}`
-        })
-        
-        setIsUploading(false)
+      })
+      
+      setIsUploading(false)
         
         // Refresh projects to update file count
         fetchProjects()
         
         // Navigate to analysis page to view the hex
-        navigate('/analysis')
-      }
-      reader.onerror = () => {
-        setIsUploading(false)
+      navigate('/analysis')
+    }
+    reader.onerror = () => {
+      setIsUploading(false)
         setUploadError('Failed to read file for display')
         toast.error('Upload succeeded but failed to read file', {
           description: 'The file was uploaded but could not be displayed. You can still view it in the project.'
-        })
-      }
-      reader.readAsArrayBuffer(file)
+      })
+    }
+    reader.readAsArrayBuffer(file)
     } catch (error) {
       setIsUploading(false)
       let errorMessage = 'Failed to upload file'

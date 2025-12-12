@@ -5,17 +5,32 @@
  * files, scans, and management options.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, FileCode, Calendar, Lock, Globe, Upload, Settings, Activity } from 'lucide-react'
+import { ArrowLeft, FileCode, Calendar, Lock, Globe, Upload, Settings, Activity, Eye, CheckCircle2, XCircle, Loader2, Trash2, Plus, Upload as UploadIcon, AlertCircle } from 'lucide-react'
 import { Header } from '../components/Header'
 import { Button } from '../components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
+import { Progress } from '../components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Skeleton } from '../components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Input } from '../components/ui/input'
+import { Textarea } from '../components/ui/textarea'
+import { Label } from '../components/ui/label'
+import { Switch } from '../components/ui/switch'
 import { useProjectStore } from '../store/projectStore'
-import { Project } from '../types/project'
+import { useAnalysisStore } from '../store/analysisStore'
+import { useAuthStore } from '../store/authStore'
+import { Project, UpdateProjectData } from '../types/project'
+import { getProjectFiles, ProjectFile, downloadFile, deleteFile as deleteFileService, uploadFile } from '../services/fileService'
+import { updateProject } from '../services/projectService'
+import { getScanResults, type CandidateResponse } from '../services/scanService'
+import { formatBytes } from '../lib/utils'
+import { toast } from '../hooks/use-toast'
+import { useUploadStore } from '../store/uploadStore'
 
 /**
  * Format relative time (e.g., "2 hours ago", "3 days ago")
@@ -42,16 +57,47 @@ function formatRelativeTime(timestamp: string): string {
 /**
  * Project Header Component
  */
-function ProjectHeader({ project }: { project: Project }) {
+function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: Project; onProjectUpdate: () => void; onUploadClick: () => void }) {
   const navigate = useNavigate()
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editName, setEditName] = useState(project.name)
+  const [editDescription, setEditDescription] = useState(project.description || '')
+  const [editIsPrivate, setEditIsPrivate] = useState(project.is_private)
+  const [isSaving, setIsSaving] = useState(false)
 
   const handleEditProject = () => {
-    // TODO: Open edit modal (Epic 08 Story 02)
-    console.log('Edit project:', project.project_id)
+    setEditName(project.name)
+    setEditDescription(project.description || '')
+    setEditIsPrivate(project.is_private)
+    setEditDialogOpen(true)
+  }
+
+  const handleSaveProject = async () => {
+    try {
+      setIsSaving(true)
+      const updates: UpdateProjectData = {
+        name: editName,
+        description: editDescription || undefined,
+        is_private: editIsPrivate
+      }
+      await updateProject(project.project_id, updates)
+      toast.success('Project updated', {
+        description: 'Project settings have been saved.'
+      })
+      setEditDialogOpen(false)
+      onProjectUpdate()
+    } catch (error) {
+      console.error('Failed to update project:', error)
+      toast.error('Failed to update project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleUploadFile = () => {
-    navigate(`/upload?project=${project.project_id}`)
+    onUploadClick()
   }
 
   return (
@@ -117,18 +163,447 @@ function ProjectHeader({ project }: { project: Project }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Project Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+            <DialogDescription>
+              Update your project details. Changes will be saved immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-name">Project Name</Label>
+              <Input
+                id="project-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="My Project"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-description">Description</Label>
+              <Textarea
+                id="project-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Project description (optional)"
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="project-private">Private Project</Label>
+                <p className="text-sm text-muted-foreground">
+                  Only you can see this project
+                </p>
+              </div>
+              <Switch
+                id="project-private"
+                checked={editIsPrivate}
+                onCheckedChange={setEditIsPrivate}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveProject} disabled={isSaving || !editName.trim()}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+/**
+ * Upload File Dialog Component
+ */
+function UploadFileDialog({ 
+  project, 
+  open, 
+  onOpenChange,
+  onUploadComplete 
+}: { 
+  project: Project; 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void;
+  onUploadComplete: () => void;
+}) {
+  const { setFileData } = useAnalysisStore()
+  const { accessToken } = useAuthStore()
+  const { isUploading, uploadProgress, uploadError, setIsUploading, setUploadProgress, setUploadError } = useUploadStore()
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const navigate = useNavigate()
+
+  const MAX_FILE_SIZE = 16 * 1024 * 1024 // 16MB
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('File too large', {
+        description: `Maximum file size is ${formatBytes(MAX_FILE_SIZE)}. Your file is ${formatBytes(file.size)}.`
+      })
+      return
+    }
+
+    // Set upload state
+    setIsUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+
+    try {
+      // Upload file to backend
+      const uploadResponse = await uploadFile(
+        project.project_id,
+        file,
+        (progress) => {
+          setUploadProgress(progress)
+        }
+      )
+
+      // Read file for local display
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        setFileData(data, file.name, uploadResponse.file_id)
+        
+        // Show success message
+        const duplicateMsg = uploadResponse.duplicate ? ' (duplicate file, using existing)' : ''
+        toast.success('File uploaded successfully', {
+          description: `${file.name} (${formatBytes(file.size)}) uploaded to project "${project.name}"${duplicateMsg}`
+        })
+        
+        setIsUploading(false)
+        onUploadComplete()
+        onOpenChange(false)
+        
+        // Navigate to analysis page to view the hex
+        navigate('/analysis')
+      }
+      reader.onerror = () => {
+        setIsUploading(false)
+        setUploadError('Failed to read file for display')
+        toast.error('Upload succeeded but failed to read file', {
+          description: 'The file was uploaded but could not be displayed. You can still view it in the project.'
+        })
+        onUploadComplete()
+        onOpenChange(false)
+      }
+      reader.readAsArrayBuffer(file)
+    } catch (error) {
+      setIsUploading(false)
+      let errorMessage = 'Failed to upload file'
+      
+      console.error('Upload error:', error)
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      }
+      
+      setUploadError(errorMessage)
+      toast.error('Upload failed', {
+        description: errorMessage
+      })
+    }
+  }, [project.project_id, project.name, setFileData, setIsUploading, setUploadProgress, setUploadError, onUploadComplete, onOpenChange, navigate])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      handleFileUpload(file)
+    }
+  }, [handleFileUpload])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }, [])
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleFileUpload(file)
+      // Reset the input
+      setTimeout(() => {
+        if (e.target) {
+          e.target.value = ''
+        }
+      }, 200)
+    }
+  }, [handleFileUpload])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Upload File to {project.name}</DialogTitle>
+          <DialogDescription>
+            Drag and drop a binary file or click to browse (Max: {formatBytes(MAX_FILE_SIZE)})
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          {/* Upload Progress */}
+          {isUploading && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Uploading...</span>
+                <span>{Math.round(uploadProgress)}%</span>
+              </div>
+              <Progress value={uploadProgress} className="w-full" />
+            </div>
+          )}
+
+          {/* Upload Error */}
+          {uploadError && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">Upload Error</span>
+              </div>
+              <p className="text-sm text-destructive mt-1">{uploadError}</p>
+            </div>
+          )}
+
+          {/* Drop zone */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+              isUploading
+                ? 'border-muted bg-muted/50 cursor-not-allowed'
+                : isDragging
+                  ? 'border-primary bg-primary/10 cursor-pointer'
+                  : 'border-border hover:border-primary/50 hover:bg-accent/50 cursor-pointer'
+            }`}
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isUploading && fileInputRef.current) {
+                fileInputRef.current.click()
+              }
+            }}
+          >
+            <UploadIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-lg mb-2">
+              {isDragging ? 'Drop file here' : 'Drag and drop your firmware file here'}
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
+            <Button 
+              variant="outline"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (!isUploading && fileInputRef.current) {
+                  fileInputRef.current.click()
+                }
+              }}
+              disabled={isUploading}
+            >
+              <FileCode className="w-4 h-4 mr-2" />
+              Select File
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileInput}
+              accept=".bin,.hex,.ecu,.dat"
+              disabled={isUploading}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 /**
  * Files Tab Content
  */
-function FilesTab({ project }: { project: Project }) {
+function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Project; onProjectUpdate: () => void; onUploadClick?: () => void }) {
   const navigate = useNavigate()
-  const fileCount = project.file_count || 0
+  const { setFileData, setCandidates, setScanId } = useAnalysisStore()
+  const { accessToken } = useAuthStore()
+  const [files, setFiles] = useState<ProjectFile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [openingFileId, setOpeningFileId] = useState<string | null>(null)
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [fileToDelete, setFileToDelete] = useState<ProjectFile | null>(null)
 
-  if (fileCount === 0) {
+  useEffect(() => {
+    loadFiles()
+  }, [project.project_id])
+
+  const loadFiles = async () => {
+    try {
+      setLoading(true)
+      const response = await getProjectFiles(project.project_id)
+      setFiles(response.files)
+    } catch (error) {
+      console.error('Failed to load files:', error)
+      toast.error('Failed to load files', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleOpenFile = async (file: ProjectFile) => {
+    try {
+      setOpeningFileId(file.file_id)
+      
+      // Download file
+      const fileData = await downloadFile(file.file_id)
+      const uint8Array = new Uint8Array(fileData)
+      
+      // Set file data in store
+      setFileData(uint8Array, file.filename, file.file_id)
+      
+      // If file has a scan, load the candidates
+      if (file.has_scan && file.latest_scan_id) {
+        try {
+          // Load scan results using scan service
+          const scanData = await getScanResults(file.latest_scan_id)
+          setScanId(file.latest_scan_id)
+          
+          // Convert candidates to MapCandidate format
+          const convertCandidate = (c: CandidateResponse) => {
+            const features = c.features || {}
+            let dimensions: { x: number; y: number; z?: number } | undefined
+            
+            if (features.x_size || features.width) {
+              dimensions = {
+                x: features.x_size || features.width || 0,
+                y: features.y_size || features.height || 0,
+                z: features.z_size || features.depth
+              }
+            }
+            
+            // Determine type from pattern_type
+            // Backend uses: '1d_array', '2d_table', 'unknown'
+            let type: '1D' | '2D' | '3D' = '2D'
+            if (c.pattern_type) {
+              const patternLower = c.pattern_type.toLowerCase()
+              if (patternLower.includes('1d') || patternLower === '1d_array') {
+                type = '1D'
+              } else if (patternLower.includes('3d') || patternLower === '3d_table') {
+                type = '3D'
+              } else if (patternLower.includes('2d') || patternLower === '2d_table') {
+                type = '2D'
+              }
+            }
+            
+            return {
+              id: c.candidate_id,
+              type,
+              offset: c.offset,
+              confidence: Math.round(c.confidence * 100), // Convert to percentage
+              size: c.size,
+              dimensions
+            }
+          }
+          
+          const candidates = scanData.candidates.map(convertCandidate)
+          setCandidates(candidates)
+        } catch (error) {
+          console.warn('Failed to load scan results:', error)
+          // Continue anyway - file will load without scan results
+        }
+      } else {
+        // Clear candidates if no scan
+        setCandidates([])
+        setScanId(null)
+      }
+      
+      // Navigate to analysis page
+      navigate('/analysis')
+    } catch (error) {
+      console.error('Failed to open file:', error)
+      toast.error('Failed to open file', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setOpeningFileId(null)
+    }
+  }
+
+  const handleDeleteFile = (file: ProjectFile) => {
+    setFileToDelete(file)
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDeleteFile = async () => {
+    if (!fileToDelete) return
+
+    try {
+      setDeletingFileId(fileToDelete.file_id)
+      await deleteFileService(fileToDelete.file_id)
+      toast.success('File deleted', {
+        description: `${fileToDelete.filename} has been removed from the project.`
+      })
+      setDeleteConfirmOpen(false)
+      setFileToDelete(null)
+      await loadFiles()
+      onProjectUpdate() // Refresh project to update file count
+    } catch (error) {
+      console.error('Failed to delete file:', error)
+      toast.error('Failed to delete file', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setDeletingFileId(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Files</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (files.length === 0) {
     return (
       <Card className="p-12 text-center">
         <FileCode className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
@@ -136,7 +611,7 @@ function FilesTab({ project }: { project: Project }) {
         <p className="text-muted-foreground mb-6 max-w-md mx-auto">
           Upload your first firmware file to get started with analysis
         </p>
-        <Button onClick={() => navigate(`/upload?project=${project.project_id}`)}>
+        <Button onClick={onUploadClick}>
           <Upload className="w-4 h-4 mr-2" />
           Upload First File
         </Button>
@@ -145,18 +620,132 @@ function FilesTab({ project }: { project: Project }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Files ({fileCount})</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground">
-          File management will be implemented in a future story.
-          Currently showing {fileCount} files in this project.
-        </p>
-        {/* TODO: Implement file list table in future story */}
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Files ({files.length})</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={loadFiles}>
+                Refresh
+              </Button>
+              <Button size="sm" onClick={onUploadClick}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add File
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Filename</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead>Uploaded</TableHead>
+                <TableHead>Scan Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {files.map((file) => (
+                <TableRow key={file.file_id}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <FileCode className="w-4 h-4 text-muted-foreground" />
+                      {file.filename}
+                    </div>
+                  </TableCell>
+                  <TableCell>{formatBytes(file.size_bytes)}</TableCell>
+                  <TableCell>{formatRelativeTime(file.uploaded_at)}</TableCell>
+                  <TableCell>
+                    {file.has_scan ? (
+                      <div className="flex flex-col gap-1">
+                        <Badge variant="default" className="flex items-center gap-1 w-fit">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Scanned
+                        </Badge>
+                        {file.latest_scan_at && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatRelativeTime(file.latest_scan_at)}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                        <XCircle className="w-3 h-3" />
+                        Not scanned
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenFile(file)}
+                        disabled={openingFileId === file.file_id}
+                      >
+                        {openingFileId === file.file_id ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Opening...
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Open
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteFile(file)}
+                        disabled={deletingFileId === file.file_id}
+                      >
+                        {deletingFileId === file.file_id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        )}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete File</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{fileToDelete?.filename}</strong>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteFile} disabled={deletingFileId !== null}>
+              {deletingFileId ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -198,24 +787,6 @@ function SettingsTab({ project }: { project: Project }) {
   )
 }
 
-/**
- * Activity Tab Content
- */
-function ActivityTab({ project }: { project: Project }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Activity</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground">
-          Project activity and audit log will be shown here.
-        </p>
-        {/* TODO: Implement activity feed in future story */}
-      </CardContent>
-    </Card>
-  )
-}
 
 /**
  * Loading Skeleton
@@ -271,6 +842,20 @@ export function ProjectDetail() {
   const { projects, isLoading, fetchProjects } = useProjectStore()
   const [project, setProject] = useState<Project | null>(null)
   const [projectLoading, setProjectLoading] = useState(true)
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+
+  const handleProjectUpdate = async () => {
+    // Refresh project list to get updated project data
+    await fetchProjects()
+    // Update local project state from store
+    if (projectId) {
+      const state = useProjectStore.getState()
+      const foundProject = state.projects.find(p => p.project_id === projectId)
+      if (foundProject) {
+        setProject(foundProject)
+      }
+    }
+  }
 
   // Fetch projects if not loaded
   useEffect(() => {
@@ -290,8 +875,11 @@ export function ProjectDetail() {
         console.error('Project not found:', projectId)
       }
       setProjectLoading(false)
+    } else if (projectId && !isLoading && projects.length === 0) {
+      // If we have a projectId but no projects loaded, try fetching
+      fetchProjects()
     }
-  }, [projectId, projects])
+  }, [projectId, projects, isLoading, fetchProjects])
 
   // Show loading state
   if (projectLoading || isLoading) {
@@ -331,7 +919,21 @@ export function ProjectDetail() {
       <Header />
       
       <div className="container mx-auto px-4 py-8">
-        <ProjectHeader project={project} />
+        <ProjectHeader 
+          project={project} 
+          onProjectUpdate={handleProjectUpdate}
+          onUploadClick={() => setUploadDialogOpen(true)}
+        />
+
+        {/* Upload File Dialog */}
+        {project && (
+          <UploadFileDialog 
+            project={project} 
+            open={uploadDialogOpen} 
+            onOpenChange={setUploadDialogOpen}
+            onUploadComplete={handleProjectUpdate}
+          />
+        )}
 
         {/* Tabs */}
         <Tabs defaultValue="files" className="space-y-6">
@@ -348,14 +950,14 @@ export function ProjectDetail() {
               <Settings className="w-4 h-4" />
               Settings
             </TabsTrigger>
-            <TabsTrigger value="activity" className="flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              Activity
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="files">
-            <FilesTab project={project} />
+            <FilesTab 
+              project={project} 
+              onProjectUpdate={handleProjectUpdate}
+              onUploadClick={() => setUploadDialogOpen(true)}
+            />
           </TabsContent>
 
           <TabsContent value="scans">
@@ -364,10 +966,6 @@ export function ProjectDetail() {
 
           <TabsContent value="settings">
             <SettingsTab project={project} />
-          </TabsContent>
-
-          <TabsContent value="activity">
-            <ActivityTab project={project} />
           </TabsContent>
         </Tabs>
       </div>

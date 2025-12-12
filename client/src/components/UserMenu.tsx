@@ -54,15 +54,14 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="relative h-10 w-10 rounded-full"
+        <button
+          className="relative h-10 w-10 rounded-full p-0 overflow-hidden border-0 bg-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           aria-label="User menu"
         >
-          <div className="flex h-full w-full items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <span className="text-sm font-medium">{initials}</span>
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
+            {initials}
           </div>
-        </Button>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">

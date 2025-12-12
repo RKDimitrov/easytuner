@@ -18,6 +18,7 @@ from app.detection.preprocessing import preprocess_binary
 from app.detection.types import DataType, DetectionResult
 from app.models.candidate import Candidate
 from app.models.firmware_file import FirmwareFile
+from app.models.project import Project
 from app.models.scan_job import ScanJob
 from app.services.file_storage import file_storage
 
@@ -63,7 +64,8 @@ class ScanService:
             .join(FirmwareFile.project)
             .where(
                 FirmwareFile.file_id == file_id,
-                FirmwareFile.project.has(user_id=user_id)
+                Project.owner_user_id == user_id,
+                FirmwareFile.deleted_at.is_(None)
             )
         )
         firmware_file = result.scalar_one_or_none()
@@ -82,8 +84,8 @@ class ScanService:
         
         scan_job = ScanJob(
             file_id=file_id,
-            status='pending',
-            config=scan_config
+            status='queued',
+            scan_config=scan_config
         )
         
         db.add(scan_job)
@@ -132,7 +134,7 @@ class ScanService:
             raw_bytes = file_storage.read_file(scan_job.file_id)
             
             # Extract config
-            config = scan_job.config or {}
+            config = scan_job.scan_config or {}
             data_types = config.get('data_types', ['u8', 'u16le', 'u16be', 'u32le'])
             endianness_hint = config.get('endianness_hint')
             window_size = config.get('window_size', 64)
@@ -166,14 +168,48 @@ class ScanService:
             # Save candidates to database
             candidates_created = 0
             for detection in merged_detections:
+                # Map pattern_type to Candidate type
+                # pattern_type: '1d_array', '2d_table', 'unknown'
+                pattern_type_lower = detection.pattern_type.lower()
+                if '1d' in pattern_type_lower or pattern_type_lower == '1d_array':
+                    candidate_type = '1D'
+                elif '2d' in pattern_type_lower or pattern_type_lower == '2d_table':
+                    candidate_type = '2D'
+                elif '3d' in pattern_type_lower:
+                    candidate_type = '3D'
+                else:
+                    candidate_type = 'scalar'
+                
+                # Extract dimensions from features if available
+                features_dict = detection.features.to_dict()
+                dimensions = {}
+                # Try to infer dimensions from size and data type
+                # This is a simple heuristic - can be improved
+                if detection.size > 0:
+                    # Calculate element size based on data type
+                    element_size = 1
+                    if '32' in detection.data_type.value:
+                        element_size = 4
+                    elif '16' in detection.data_type.value:
+                        element_size = 2
+                    
+                    # Estimate dimensions based on size
+                    num_elements = detection.size // element_size
+                    dimensions = {
+                        'size_bytes': detection.size,
+                        'estimated_elements': num_elements
+                    }
+                
                 candidate = Candidate(
                     scan_id=scan_id,
-                    offset=detection.offset,
-                    size=detection.size,
-                    data_type=detection.data_type.value,
+                    type=candidate_type,
                     confidence=detection.confidence,
-                    pattern_type=detection.pattern_type,
-                    features=detection.features.to_dict()
+                    byte_offset_start=detection.offset,
+                    byte_offset_end=detection.offset + detection.size,
+                    data_type=detection.data_type.value,
+                    dimensions=dimensions,
+                    feature_scores=features_dict,
+                    detection_method_version='1.0.0'  # MVP version
                 )
                 db.add(candidate)
                 candidates_created += 1
@@ -237,7 +273,7 @@ class ScanService:
             .join(FirmwareFile.project)
             .where(
                 ScanJob.scan_id == scan_id,
-                FirmwareFile.project.has(user_id=user_id)
+                Project.owner_user_id == user_id
             )
         )
         return result.scalar_one_or_none()

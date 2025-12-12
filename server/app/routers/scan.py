@@ -80,9 +80,13 @@ async def create_scan(
         )
     except Exception as e:
         logger.error(f"Scan execution failed: {e}", exc_info=True)
+        error_detail = str(e)
+        # Include error message from scan job if available
+        if hasattr(e, 'args') and e.args:
+            error_detail = str(e.args[0])
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Scan execution failed"
+            detail=f"Scan execution failed: {error_detail}"
         )
 
 
@@ -204,16 +208,33 @@ async def get_scan_results(
             detail="Scan job not found"
         )
     
-    # Get candidates
-    candidates = await scan_service.get_scan_candidates(
-        db, scan_id, current_user.user_id, limit, offset
-    )
-    
-    return ScanResultsResponse(
-        scan=ScanResponse.model_validate(scan_job),
-        candidates=[CandidateResponse.model_validate(c) for c in candidates],
-        total_candidates=scan_job.candidates_found or 0,
-        page=offset // limit,
-        page_size=limit
-    )
+    try:
+        # Get candidates
+        candidates = await scan_service.get_scan_candidates(
+            db, scan_id, current_user.user_id, limit, offset
+        )
+        
+        # Convert candidates to response format
+        candidate_responses = []
+        for c in candidates:
+            try:
+                candidate_responses.append(CandidateResponse.model_validate(c))
+            except Exception as e:
+                logger.error(f"Failed to validate candidate {c.candidate_id}: {e}", exc_info=True)
+                # Skip invalid candidates but continue processing
+                continue
+        
+        return ScanResultsResponse(
+            scan=ScanResponse.model_validate(scan_job),
+            candidates=candidate_responses,
+            total_candidates=scan_job.candidates_found or 0,
+            page=offset // limit if limit > 0 else 0,
+            page_size=limit
+        )
+    except Exception as e:
+        logger.error(f"Failed to get scan results for {scan_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get scan results: {str(e)}"
+        )
 

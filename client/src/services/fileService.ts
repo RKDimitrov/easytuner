@@ -174,3 +174,55 @@ export async function getFileMetadata(fileId: string): Promise<FileMetadata> {
   }
 }
 
+export interface ProjectFile {
+  file_id: string
+  filename: string
+  size_bytes: number
+  sha256: string
+  uploaded_at: string
+  created_at: string
+  updated_at: string
+  has_scan: boolean
+  latest_scan_id: string | null
+  latest_scan_at: string | null
+  scan_count: number
+}
+
+export interface ProjectFilesResponse {
+  files: ProjectFile[]
+  count: number
+}
+
+/**
+ * Get files for a project
+ * GET /api/v1/projects/{project_id}/files
+ */
+export async function getProjectFiles(projectId: string): Promise<ProjectFilesResponse> {
+  try {
+    const api = createAuthAxios()
+    const response = await api.get<ProjectFilesResponse>(`/projects/${projectId}/files`)
+    return response.data
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.detail || 'Failed to get project files')
+    }
+    throw error
+  }
+}
+
+/**
+ * Delete a file
+ * DELETE /api/v1/files/{file_id}
+ */
+export async function deleteFile(fileId: string): Promise<void> {
+  try {
+    const api = createAuthAxios()
+    await api.delete(`/files/${fileId}`)
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.detail || 'Failed to delete file')
+    }
+    throw error
+  }
+}
+

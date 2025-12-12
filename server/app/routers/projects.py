@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
@@ -15,6 +15,7 @@ from app.database import get_db
 from app.models.project import Project
 from app.models.firmware_file import FirmwareFile
 from app.models.user import User
+from app.models.scan_job import ScanJob
 
 logger = logging.getLogger(__name__)
 
@@ -369,4 +370,100 @@ async def delete_project(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete project"
         )
+
+
+@router.get(
+    "/{project_id}/files",
+    status_code=status.HTTP_200_OK,
+    summary="Get project files",
+    description="Get all files for a project"
+)
+async def get_project_files(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all files for a project.
+    
+    Args:
+        project_id: UUID of the project
+        current_user: Authenticated user
+        db: Database session
+        
+    Returns:
+        List of files with their latest scan status
+        
+    Raises:
+        404: If project not found or access denied
+    """
+    # Verify project exists and user has access
+    result = await db.execute(
+        select(Project)
+        .where(
+            Project.project_id == project_id,
+            Project.owner_user_id == current_user.user_id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or access denied"
+        )
+    
+    # Get files
+    files_query = (
+        select(FirmwareFile)
+        .where(
+            FirmwareFile.project_id == project_id,
+            FirmwareFile.deleted_at.is_(None)
+        )
+        .order_by(FirmwareFile.uploaded_at.desc())
+    )
+    files_result = await db.execute(files_query)
+    files_list = files_result.scalars().all()
+    
+    # Get scan counts and latest scans for each file
+    files = []
+    for file in files_list:
+        # Count total scans
+        scan_count_result = await db.execute(
+            select(func.count(ScanJob.scan_id))
+            .where(ScanJob.file_id == file.file_id)
+        )
+        scan_count = scan_count_result.scalar() or 0
+        
+        # Get latest completed scan
+        latest_scan_result = await db.execute(
+            select(ScanJob)
+            .where(
+                ScanJob.file_id == file.file_id,
+                ScanJob.status == 'completed'
+            )
+            .order_by(desc(ScanJob.created_at))
+            .limit(1)
+        )
+        latest_scan = latest_scan_result.scalar_one_or_none()
+        
+        files.append({
+            "file_id": str(file.file_id),
+            "filename": file.filename,
+            "size_bytes": file.size_bytes,
+            "sha256": file.sha256,
+            "uploaded_at": file.uploaded_at.isoformat(),
+            "created_at": file.created_at.isoformat(),
+            "updated_at": file.updated_at.isoformat(),
+            "has_scan": latest_scan is not None,
+            "latest_scan_id": str(latest_scan.scan_id) if latest_scan else None,
+            "latest_scan_at": latest_scan.created_at.isoformat() if latest_scan else None,
+            "scan_count": scan_count
+        })
+    
+    return {
+        "files": files,
+        "count": len(files)
+    }
 
