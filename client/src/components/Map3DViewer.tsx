@@ -14,9 +14,11 @@ import { formatHexOffset } from '../lib/utils'
 interface Map3DViewerProps {
   candidate: MapCandidate
   fileData: Uint8Array
+  /** If true, renders without Card wrapper (for use in tabs) */
+  noCard?: boolean
 }
 
-export function Map3DViewer({ candidate, fileData }: Map3DViewerProps) {
+export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [error, setError] = useState<string | null>(null)
@@ -271,7 +273,57 @@ export function Map3DViewer({ candidate, fileData }: Map3DViewerProps) {
     }
   }, [])
 
+  const viewerContent = (
+    <div ref={containerRef} className="w-full h-full bg-background relative">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full"
+        style={{ display: 'block' }}
+      />
+    </div>
+  )
+
+  const headerContent = (
+    <div className="flex items-center justify-between mb-4">
+      <div>
+        <h3 className="text-lg font-semibold">
+          3D Map Visualization - {candidate.type} Map
+        </h3>
+        <div className="text-sm text-muted-foreground mt-1">
+          Offset: {formatHexOffset(candidate.offset)} | 
+          Size: {candidate.size} bytes | 
+          Confidence: {candidate.confidence}% | 
+          Dimensions: {candidate.dimensions?.x}×{candidate.dimensions?.y}
+          {candidate.dimensions?.z ? `×${candidate.dimensions.z}` : ''}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleReset}>
+          <RotateCcw className="w-4 h-4 mr-2" />
+          Reset View
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleFullscreen}>
+          <Maximize2 className="w-4 h-4 mr-2" />
+          Fullscreen
+        </Button>
+      </div>
+    </div>
+  )
+
   if (error) {
+    const errorContent = (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-destructive mb-2">Error loading 3D view</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
+        </div>
+      </div>
+    )
+
+    if (noCard) {
+      return errorContent
+    }
+
     return (
       <Card className="h-full">
         <CardContent className="flex items-center justify-center h-full">
@@ -285,12 +337,33 @@ export function Map3DViewer({ candidate, fileData }: Map3DViewerProps) {
   }
 
   if (!candidate.dimensions) {
+    const noDimensionsContent = (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">No dimension data available for 3D visualization</p>
+      </div>
+    )
+
+    if (noCard) {
+      return noDimensionsContent
+    }
+
     return (
       <Card className="h-full">
         <CardContent className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">No dimension data available for 3D visualization</p>
         </CardContent>
       </Card>
+    )
+  }
+
+  if (noCard) {
+    return (
+      <div className="h-full flex flex-col p-4">
+        {headerContent}
+        <div className="flex-1 overflow-hidden">
+          {viewerContent}
+        </div>
+      </div>
     )
   }
 
@@ -321,13 +394,7 @@ export function Map3DViewer({ candidate, fileData }: Map3DViewerProps) {
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
-        <div ref={containerRef} className="w-full h-full bg-background relative">
-          <canvas
-            ref={canvasRef}
-            className="w-full h-full"
-            style={{ display: 'block' }}
-          />
-        </div>
+        {viewerContent}
       </CardContent>
     </Card>
   )

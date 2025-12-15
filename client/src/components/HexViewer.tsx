@@ -8,7 +8,12 @@ import { toast } from '../hooks/use-toast'
 
 const BYTES_PER_ROW = 16
 
-export function HexViewer() {
+interface HexViewerProps {
+  /** If true, renders without Card wrapper (for use in tabs) */
+  noCard?: boolean
+}
+
+export function HexViewer({ noCard = false }: HexViewerProps = {}) {
   const fileData = useAnalysisStore((state) => state.fileData)
   const fileId = useAnalysisStore((state) => state.fileId)
   const fileName = useAnalysisStore((state) => state.fileName)
@@ -87,31 +92,12 @@ export function HexViewer() {
     }
   }, [selectedCandidate, rowVirtualizer, fileData])
 
-  if (!fileData) {
-    return (
-      <Card className="h-full flex items-center justify-center">
-        <CardContent>
-          {isLoading ? (
-            <p className="text-muted-foreground">Loading file...</p>
-          ) : (
-          <p className="text-muted-foreground">No file loaded</p>
-          )}
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Hex Viewer</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <div
-          ref={parentRef}
-          className="h-full overflow-auto bg-card"
-          style={{ contain: 'strict' }}
-        >
+  const content = (
+    <div
+      ref={parentRef}
+      className="h-full overflow-auto bg-card"
+      style={{ contain: 'strict' }}
+    >
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,
@@ -180,6 +166,47 @@ export function HexViewer() {
             })}
           </div>
         </div>
+  )
+
+  if (!fileData) {
+    const emptyContent = (
+      <div className="h-full flex items-center justify-center">
+        {isLoading ? (
+          <p className="text-muted-foreground">Loading file...</p>
+        ) : (
+          <p className="text-muted-foreground">No file loaded</p>
+        )}
+      </div>
+    )
+
+    if (noCard) {
+      return emptyContent
+    }
+
+    return (
+      <Card className="h-full flex items-center justify-center">
+        <CardContent>
+          {isLoading ? (
+            <p className="text-muted-foreground">Loading file...</p>
+          ) : (
+            <p className="text-muted-foreground">No file loaded</p>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (noCard) {
+    return content
+  }
+
+  return (
+    <Card className="h-full flex flex-col">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Hex Viewer</CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-hidden p-0">
+        {content}
       </CardContent>
     </Card>
   )

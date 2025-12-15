@@ -69,6 +69,7 @@ class CandidateResponse(BaseModel):
     confidence: float
     pattern_type: str  # Mapped from type
     features: Dict  # Mapped from feature_scores
+    dimensions: Dict  # Structure dimensions (e.g., {x: 16, y: 16})
     created_at: datetime
     
     model_config = {
@@ -91,6 +92,7 @@ class CandidateResponse(BaseModel):
                     'confidence': float(obj.confidence),
                     'pattern_type': str(obj.type),  # Map type to pattern_type
                     'features': dict(obj.feature_scores) if obj.feature_scores else {},  # Map feature_scores to features
+                    'dimensions': dict(obj.dimensions) if obj.dimensions else {},  # Include dimensions
                     'created_at': obj.created_at,
                 }
                 return cls(**data)

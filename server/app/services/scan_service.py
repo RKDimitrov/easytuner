@@ -148,6 +148,8 @@ class ScanService:
             # Extract features and detect patterns for each view
             all_detections: List[DetectionResult] = []
             
+            logger.info(f"Starting pattern detection with window_size={window_size}, stride={stride}, min_confidence={min_confidence}")
+            
             for dtype, view in metadata.views.items():
                 logger.info(f"Scanning {dtype.value} view ({len(view.data)} elements)")
                 
@@ -162,8 +164,12 @@ class ScanService:
                 all_detections.extend(detections)
                 logger.info(f"Found {len(detections)} patterns in {dtype.value} view")
             
+            logger.info(f"Total detections before merging: {len(all_detections)}")
+            
             # Merge overlapping detections
             merged_detections = merge_overlapping_detections(all_detections, overlap_threshold=0.5)
+            
+            logger.info(f"Total detections after merging: {len(merged_detections)}")
             
             # Save candidates to database
             candidates_created = 0
@@ -195,10 +201,68 @@ class ScanService:
                     
                     # Estimate dimensions based on size
                     num_elements = detection.size // element_size
-                    dimensions = {
-                        'size_bytes': detection.size,
-                        'estimated_elements': num_elements
-                    }
+                    
+                    # Try to infer dimensions based on pattern type
+                    if candidate_type == '1D':
+                        dimensions = {
+                            'x': num_elements,
+                            'size_bytes': detection.size,
+                            'estimated_elements': num_elements
+                        }
+                    elif candidate_type == '2D':
+                        # Try to infer square dimensions for 2D maps
+                        # Common ECU map sizes: 8x8, 12x12, 16x16, 20x20, etc.
+                        sqrt = int(num_elements ** 0.5)
+                        # Check if it's close to a perfect square
+                        if sqrt * sqrt == num_elements:
+                            dimensions = {
+                                'x': sqrt,
+                                'y': sqrt,
+                                'size_bytes': detection.size,
+                                'estimated_elements': num_elements
+                            }
+                        else:
+                            # Try common aspect ratios
+                            # Check for 16:1 (common for 1D arrays stored as 2D)
+                            if num_elements % 16 == 0:
+                                dimensions = {
+                                    'x': num_elements // 16,
+                                    'y': 16,
+                                    'size_bytes': detection.size,
+                                    'estimated_elements': num_elements
+                                }
+                            else:
+                                # Default: use estimated_elements as x, 1 as y
+                                dimensions = {
+                                    'x': num_elements,
+                                    'y': 1,
+                                    'size_bytes': detection.size,
+                                    'estimated_elements': num_elements
+                                }
+                    elif candidate_type == '3D':
+                        # For 3D, try to infer cubic dimensions
+                        cube_root = int(num_elements ** (1/3))
+                        if cube_root * cube_root * cube_root == num_elements:
+                            dimensions = {
+                                'x': cube_root,
+                                'y': cube_root,
+                                'z': cube_root,
+                                'size_bytes': detection.size,
+                                'estimated_elements': num_elements
+                            }
+                        else:
+                            dimensions = {
+                                'x': num_elements,
+                                'y': 1,
+                                'z': 1,
+                                'size_bytes': detection.size,
+                                'estimated_elements': num_elements
+                            }
+                    else:
+                        dimensions = {
+                            'size_bytes': detection.size,
+                            'estimated_elements': num_elements
+                        }
                 
                 candidate = Candidate(
                     scan_id=scan_id,

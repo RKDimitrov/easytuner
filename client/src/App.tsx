@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { Analysis } from './pages/Analysis'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
@@ -12,8 +12,14 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { setupAuthInterceptor } from './store/authStore'
 import { initializeSettings } from './store/settingsStore'
+import { useAuthStore } from './store/authStore'
+import { Button } from './components/ui/button'
+import { AlertCircle } from 'lucide-react'
 
 function App() {
+  const navigate = useNavigate()
+  const { sessionExpired, logout } = useAuthStore()
+
   // Setup axios interceptor for automatic token handling
   useEffect(() => {
     setupAuthInterceptor()
@@ -21,61 +27,87 @@ function App() {
     initializeSettings()
   }, [])
 
+  const handleSessionExpiredLogin = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/analysis"
-        element={
-          <ProtectedRoute>
-            <Analysis />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/projects"
-        element={
-          <ProtectedRoute>
-            <ProjectDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/library"
-        element={
-          <ProtectedRoute>
-            <Library />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/projects/:projectId"
-        element={
-          <ProtectedRoute>
-            <ProjectDetail />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings/*"
-        element={
-          <ProtectedRoute>
-            <Settings />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <div className="relative min-h-screen">
+      <div className={sessionExpired ? 'pointer-events-none blur-sm' : ''}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analysis"
+            element={
+              <ProtectedRoute>
+                <Analysis />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects"
+            element={
+              <ProtectedRoute>
+                <ProjectDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/library"
+            element={
+              <ProtectedRoute>
+                <Library />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:projectId"
+            element={
+              <ProtectedRoute>
+                <ProjectDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/*"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </div>
+
+      {sessionExpired && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-background border border-destructive/40 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 text-center">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 mx-auto mb-4">
+              <AlertCircle className="w-6 h-6 text-destructive" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Session expired</h2>
+            <p className="text-muted-foreground mb-6">
+              Your session has expired. Please log in again to continue.
+            </p>
+            <Button onClick={handleSessionExpiredLogin} className="w-full">
+              Go to Login
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

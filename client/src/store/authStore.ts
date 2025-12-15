@@ -17,6 +17,7 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
+  sessionExpired: boolean
 
   // Actions
   login: (credentials: LoginRequest) => Promise<void>
@@ -27,6 +28,7 @@ interface AuthState {
   clearError: () => void
   setTokens: (accessToken: string, refreshToken: string) => void
   reset: () => void
+  handleSessionExpired: () => void
 }
 
 const initialState = {
@@ -36,6 +38,7 @@ const initialState = {
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  sessionExpired: false,
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -58,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
               error: null,
+              sessionExpired: false,
             })
 
             // Fetch user details after login
@@ -88,6 +92,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
               error: null,
+              sessionExpired: false,
             })
 
             // Fetch user details after registration
@@ -139,10 +144,19 @@ export const useAuthStore = create<AuthState>()(
               accessToken: response.access_token,
               refreshToken: response.refresh_token,
               error: null,
+              sessionExpired: false,
             })
           } catch (error) {
-            // If refresh fails, logout user
-            set(initialState)
+            // If refresh fails, mark session as expired and clear auth state
+            set({
+              user: null,
+              accessToken: null,
+              refreshToken: null,
+              isAuthenticated: false,
+              isLoading: false,
+              error: 'Session expired. Please login again.',
+              sessionExpired: true,
+            })
             throw new Error('Session expired. Please login again.')
           }
         },
@@ -181,6 +195,7 @@ export const useAuthStore = create<AuthState>()(
             accessToken,
             refreshToken,
             isAuthenticated: true,
+            sessionExpired: false,
           })
         },
 
@@ -188,6 +203,21 @@ export const useAuthStore = create<AuthState>()(
          * Reset auth state to initial values
          */
         reset: () => set(initialState),
+
+        /**
+         * Handle session expiration without triggering API logout
+         */
+        handleSessionExpired: () => {
+          set({
+            user: null,
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: 'Session expired. Please login again.',
+            sessionExpired: true,
+          })
+        },
       }),
       {
         name: 'auth-storage',
@@ -241,8 +271,7 @@ export function setupAuthInterceptor() {
             originalRequest.headers.Authorization = `Bearer ${accessToken}`
             return axios(originalRequest)
           } catch (refreshError) {
-            // Refresh failed, logout user
-            useAuthStore.getState().logout()
+            // Refresh failed, auth store will mark session as expired
             return Promise.reject(refreshError)
           }
         }

@@ -6,6 +6,7 @@ import { toast } from '../hooks/use-toast'
 import { Card, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Progress } from '../components/ui/progress'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Header } from '../components/Header'
 import { HexViewer } from '../components/HexViewer'
 import { ResultsTable } from '../components/ResultsTable'
@@ -18,7 +19,8 @@ import {
   ArrowLeft, 
   Loader2,
   CheckCircle2,
-  Box
+  Box,
+  Code2
 } from 'lucide-react'
 
 export function Analysis() {
@@ -40,7 +42,7 @@ export function Analysis() {
   } = useAnalysisStore()
 
   const [scanComplete, setScanComplete] = useState(false)
-  const [show3DView, setShow3DView] = useState(false)
+  const [viewMode, setViewMode] = useState<'hex' | '3d'>('hex')
 
   // Redirect if no file loaded (check both fileData and fileId)
   // Don't redirect if fileId exists - HexViewer will load it
@@ -55,11 +57,38 @@ export function Analysis() {
 
   // Convert backend candidate to frontend format
   const convertCandidate = (candidate: CandidateResponse): MapCandidate => {
-    const features = candidate.features || {}
     let dimensions: { x: number; y: number; z?: number } | undefined
     
-    // Extract dimensions from features
-    if (features.x_size || features.width) {
+    // Extract dimensions from the dimensions field (preferred) or features
+    const dims = candidate.dimensions || {}
+    const features = candidate.features || {}
+    
+    // Try to get dimensions from the dimensions field first
+    if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
+      // If we have estimated_elements, try to infer dimensions
+      if (dims.estimated_elements && !dims.x && !dims.width) {
+        // For 1D arrays, x = estimated_elements
+        if (candidate.pattern_type?.toLowerCase().includes('1d')) {
+          dimensions = { x: dims.estimated_elements }
+        } else {
+          // For 2D, try to infer square dimensions
+          const sqrt = Math.sqrt(dims.estimated_elements)
+          if (Number.isInteger(sqrt)) {
+            dimensions = { x: sqrt, y: sqrt }
+          } else {
+            // Fallback: use estimated_elements as x
+            dimensions = { x: dims.estimated_elements, y: 1 }
+          }
+        }
+      } else {
+        dimensions = {
+          x: dims.x || dims.width || dims.rows || 0,
+          y: dims.y || dims.height || dims.cols || 0,
+          z: dims.z || dims.depth
+        }
+      }
+    } else if (features.x_size || features.width) {
+      // Fallback to features if dimensions not available
       dimensions = {
         x: features.x_size || features.width || 0,
         y: features.y_size || features.height || 0,
@@ -98,6 +127,14 @@ export function Analysis() {
     }
   }, [scanId])
 
+  // Optional: Auto-switch to 3D view when a candidate is selected
+  // Uncomment if you want automatic switching to 3D view on selection:
+  // useEffect(() => {
+  //   if (selectedCandidate && scanComplete && fileData) {
+  //     setViewMode('3d')
+  //   }
+  // }, [selectedCandidate, scanComplete, fileData])
+
   const loadScanResults = async (id: string) => {
     try {
       const results = await getScanResults(id)
@@ -124,7 +161,7 @@ export function Analysis() {
     setScanProgress(0)
     setScanComplete(false)
     setCandidates([])
-    setShow3DView(false)
+    setViewMode('hex')
 
     toast.info('Scan started', {
       description: 'Analyzing firmware file for ECU maps...'
@@ -233,15 +270,6 @@ export function Analysis() {
             </div>
             
             <div className="flex items-center gap-3">
-              {scanComplete && selectedCandidate && (
-                <Button
-                  variant="outline"
-                  onClick={() => setShow3DView(!show3DView)}
-                >
-                  <Box className="w-4 h-4 mr-2" />
-                  {show3DView ? 'Hide 3D View' : 'Show 3D View'}
-                </Button>
-              )}
               {scanComplete && (
                 <Button
                   variant="outline"
@@ -311,17 +339,77 @@ export function Analysis() {
               </div>
             </CardContent>
           </Card>
-        ) : show3DView && selectedCandidate ? (
-          <div className="h-[calc(100vh-200px)]">
-            <Map3DViewer candidate={selectedCandidate} fileData={fileData!} />
-          </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
             {/* Results Table */}
             <ResultsTable />
             
-            {/* Hex Viewer */}
-            <HexViewer />
+            {/* Viewer Panel with Tabs */}
+            <Card className="h-full flex flex-col">
+              <CardContent className="flex-1 overflow-hidden p-0">
+                <Tabs 
+                  value={viewMode} 
+                  onValueChange={(value) => setViewMode(value as 'hex' | '3d')}
+                  className="h-full flex flex-col"
+                >
+                  <div className="border-b border-border px-4 pt-4">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger 
+                        value="hex" 
+                        className="flex items-center gap-2"
+                      >
+                        <Code2 className="w-4 h-4" />
+                        Hex Viewer
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="3d" 
+                        className="flex items-center gap-2"
+                      >
+                        <Box className="w-4 h-4" />
+                        3D Visualization
+                        {!selectedCandidate && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            (Select a map)
+                          </span>
+                        )}
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
+                  
+                  <TabsContent value="hex" className="flex-1 overflow-hidden m-0 mt-0">
+                    <div className="h-full p-4">
+                      <HexViewer noCard />
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="3d" className="flex-1 overflow-hidden m-0 mt-0">
+                    {selectedCandidate && fileData ? (
+                      <div className="h-full">
+                        <Map3DViewer candidate={selectedCandidate} fileData={fileData} noCard />
+                      </div>
+                    ) : (
+                      <div className="h-full flex items-center justify-center p-4">
+                        <div className="text-center space-y-2">
+                          <Box className="w-12 h-12 mx-auto text-muted-foreground" />
+                          <p className="text-muted-foreground">
+                            {!selectedCandidate 
+                              ? 'Select a map from the results table to view in 3D'
+                              : !fileData 
+                              ? 'File data is loading...'
+                              : 'Unable to load 3D visualization'}
+                          </p>
+                          {!fileData && fileId && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              The file is being loaded from the server
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>

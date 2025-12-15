@@ -224,12 +224,17 @@ async def get_scan_results(
                 # Skip invalid candidates but continue processing
                 continue
         
+        # Use the number of loaded candidates as total count for now.
+        # If/when pagination with a separate count is needed, this can be
+        # replaced by a dedicated COUNT query or a persisted column.
+        total_candidates = len(candidate_responses)
+        
         return ScanResultsResponse(
             scan=ScanResponse.model_validate(scan_job),
             candidates=candidate_responses,
-            total_candidates=scan_job.candidates_found or 0,
+            total_candidates=total_candidates,
             page=offset // limit if limit > 0 else 0,
-            page_size=limit
+            page_size=limit,
         )
     except Exception as e:
         logger.error(f"Failed to get scan results for {scan_id}: {e}", exc_info=True)
