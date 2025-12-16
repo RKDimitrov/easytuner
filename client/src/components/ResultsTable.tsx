@@ -208,9 +208,11 @@ export function ResultsTable() {
                       {/* Dimensions */}
                       <div className="text-sm text-muted-foreground">
                         {candidate.dimensions
-                          ? `${candidate.dimensions.x}×${candidate.dimensions.y}${
-                              candidate.dimensions.z ? `×${candidate.dimensions.z}` : ''
-                            }`
+                          ? candidate.type === '1D'
+                            ? `${candidate.dimensions.x}`
+                            : candidate.type === '3D'
+                            ? `${candidate.dimensions.x}×${candidate.dimensions.y || 0}×${candidate.dimensions.z || 0}`
+                            : `${candidate.dimensions.x}×${candidate.dimensions.y || 0}`
                           : 'N/A'}
                       </div>
                     </div>

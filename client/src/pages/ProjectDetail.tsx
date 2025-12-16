@@ -497,21 +497,15 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
           const scanData = await getScanResults(file.latest_scan_id)
           setScanId(file.latest_scan_id)
           
-          // Convert candidates to MapCandidate format
+          // Convert candidates to MapCandidate format (same logic as Analysis.tsx)
           const convertCandidate = (c: CandidateResponse) => {
+            let dimensions: { x: number; y?: number; z?: number } | undefined
+            
+            // Extract dimensions from the dimensions field (preferred) or features
+            const dims = c.dimensions || {}
             const features = c.features || {}
-            let dimensions: { x: number; y: number; z?: number } | undefined
             
-            if (features.x_size || features.width) {
-              dimensions = {
-                x: features.x_size || features.width || 0,
-                y: features.y_size || features.height || 0,
-                z: features.z_size || features.depth
-              }
-            }
-            
-            // Determine type from pattern_type
-            // Backend uses: '1d_array', '2d_table', 'unknown'
+            // Determine type first to handle dimensions correctly
             let type: '1D' | '2D' | '3D' = '2D'
             if (c.pattern_type) {
               const patternLower = c.pattern_type.toLowerCase()
@@ -521,6 +515,67 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
                 type = '3D'
               } else if (patternLower.includes('2d') || patternLower === '2d_table') {
                 type = '2D'
+              }
+            }
+            
+            // Try to get dimensions from the dimensions field first
+            if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
+              // If we have estimated_elements, try to infer dimensions
+              if (dims.estimated_elements && !dims.x && !dims.width) {
+                // For 1D arrays, x = estimated_elements, no y
+                if (type === '1D') {
+                  dimensions = { x: dims.estimated_elements }
+                } else if (type === '2D') {
+                  // For 2D, try to infer square dimensions
+                  const sqrt = Math.sqrt(dims.estimated_elements)
+                  if (Number.isInteger(sqrt)) {
+                    dimensions = { x: sqrt, y: sqrt }
+                  } else {
+                    // Fallback: use estimated_elements as x, 1 as y
+                    dimensions = { x: dims.estimated_elements, y: 1 }
+                  }
+                } else if (type === '3D') {
+                  // For 3D, try to infer cubic dimensions
+                  const cubeRoot = Math.cbrt(dims.estimated_elements)
+                  if (Number.isInteger(cubeRoot)) {
+                    dimensions = { x: cubeRoot, y: cubeRoot, z: cubeRoot }
+                  } else {
+                    dimensions = { x: dims.estimated_elements, y: 1, z: 1 }
+                  }
+                }
+              } else {
+                // We have explicit dimensions
+                if (type === '1D') {
+                  // For 1D, only set x
+                  dimensions = { x: dims.x || dims.width || dims.rows || dims.estimated_elements || 0 }
+                } else if (type === '2D') {
+                  dimensions = {
+                    x: dims.x || dims.width || dims.rows || 0,
+                    y: dims.y || dims.height || dims.cols || 0
+                  }
+                } else if (type === '3D') {
+                  dimensions = {
+                    x: dims.x || dims.width || dims.rows || 0,
+                    y: dims.y || dims.height || dims.cols || 0,
+                    z: dims.z || dims.depth
+                  }
+                }
+              }
+            } else if (features.x_size || features.width) {
+              // Fallback to features if dimensions not available
+              if (type === '1D') {
+                dimensions = { x: features.x_size || features.width || 0 }
+              } else if (type === '2D') {
+                dimensions = {
+                  x: features.x_size || features.width || 0,
+                  y: features.y_size || features.height || 0
+                }
+              } else {
+                dimensions = {
+                  x: features.x_size || features.width || 0,
+                  y: features.y_size || features.height || 0,
+                  z: features.z_size || features.depth
+                }
               }
             }
             
@@ -621,8 +676,8 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
 
   return (
     <>
-      <Card>
-        <CardHeader>
+    <Card>
+      <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Files ({files.length})</CardTitle>
             <div className="flex items-center gap-2">
@@ -635,8 +690,8 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
               </Button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+      </CardHeader>
+      <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
@@ -716,8 +771,8 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </CardContent>
+    </Card>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

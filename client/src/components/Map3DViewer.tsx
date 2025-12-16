@@ -41,26 +41,11 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
     canvas.width = width
     canvas.height = height
 
-    // Clear canvas
-    ctx.fillStyle = '#1a1a1a'
+    // Clear canvas with dark background
+    ctx.fillStyle = '#0a0a0a'
     ctx.fillRect(0, 0, width, height)
 
-    // Draw placeholder visualization
-    ctx.fillStyle = '#3b82f6'
-    ctx.font = '16px monospace'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    
-    const text = `3D Map Visualization\n${dimensions.x}×${dimensions.y}${dimensions.z ? `×${dimensions.z}` : ''}\nOffset: ${formatHexOffset(candidate.offset)}`
-    const lines = text.split('\n')
-    const lineHeight = 24
-    const startY = height / 2 - (lines.length * lineHeight) / 2
-    
-    lines.forEach((line, i) => {
-      ctx.fillText(line, width / 2, startY + i * lineHeight)
-    })
-
-    // Draw a simple 3D representation
+    // Draw visualization based on map type
     if (candidate.type === '2D' && dimensions.x && dimensions.y) {
       draw2DMap(ctx, width, height, dimensions.x, dimensions.y, candidate, fileData)
     } else if (candidate.type === '3D' && dimensions.x && dimensions.y && dimensions.z) {
@@ -79,9 +64,9 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
     candidate: MapCandidate,
     fileData: Uint8Array
   ) => {
-    const padding = 40
-    const plotWidth = width - padding * 2
-    const plotHeight = height - padding * 2 - 100 // Leave space for text
+    const padding = { top: 60, right: 60, bottom: 60, left: 60 }
+    const plotWidth = width - padding.left - padding.right
+    const plotHeight = height - padding.top - padding.bottom
     const cellWidth = plotWidth / xSize
     const cellHeight = plotHeight / ySize
 
@@ -90,50 +75,99 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
     const dataEnd = Math.min(dataStart + candidate.size, fileData.length)
     const data = fileData.slice(dataStart, dataEnd)
 
-    // Draw heatmap
+    // Find min/max for better color scaling
+    let minValue = 255
+    let maxValue = 0
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] < minValue) minValue = data[i]
+      if (data[i] > maxValue) maxValue = data[i]
+    }
+    const valueRange = maxValue - minValue || 1
+
+    // Draw grid background
+    ctx.fillStyle = '#0f0f0f'
+    ctx.fillRect(padding.left, padding.top, plotWidth, plotHeight)
+
+    // Draw heatmap with improved color gradient
     for (let y = 0; y < ySize; y++) {
       for (let x = 0; x < xSize; x++) {
         const index = y * xSize + x
         if (index < data.length) {
           const value = data[index]
-          const intensity = value / 255
+          const normalizedValue = (value - minValue) / valueRange
           
-          // Color gradient from blue (low) to red (high)
-          const r = Math.floor(intensity * 255)
-          const g = 0
-          const b = Math.floor((1 - intensity) * 255)
+          // HSL color gradient: blue (low) -> cyan -> yellow -> red (high)
+          const hue = 240 - (normalizedValue * 180) // 240 (blue) to 60 (yellow)
+          const saturation = 70
+          const lightness = 30 + (normalizedValue * 40) // 30-70% lightness
           
-          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
+          ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`
           ctx.fillRect(
-            padding + x * cellWidth,
-            padding + y * cellHeight,
-            cellWidth - 1,
-            cellHeight - 1
+            padding.left + x * cellWidth,
+            padding.top + y * cellHeight,
+            cellWidth - 0.5,
+            cellHeight - 0.5
           )
         }
       }
     }
 
-    // Draw axes labels
-    ctx.fillStyle = '#ffffff'
-    ctx.font = '12px monospace'
+    // Draw grid lines
+    ctx.strokeStyle = '#1a1a1a'
+    ctx.lineWidth = 1
+    for (let x = 0; x <= xSize; x++) {
+      ctx.beginPath()
+      ctx.moveTo(padding.left + x * cellWidth, padding.top)
+      ctx.lineTo(padding.left + x * cellWidth, padding.top + plotHeight)
+      ctx.stroke()
+    }
+    for (let y = 0; y <= ySize; y++) {
+      ctx.beginPath()
+      ctx.moveTo(padding.left, padding.top + y * cellHeight)
+      ctx.lineTo(padding.left + plotWidth, padding.top + y * cellHeight)
+      ctx.stroke()
+    }
+
+    // Draw X-axis labels
+    ctx.fillStyle = '#888888'
+    ctx.font = '11px monospace'
     ctx.textAlign = 'center'
-    for (let x = 0; x < xSize; x++) {
+    ctx.textBaseline = 'top'
+    const xLabelInterval = Math.max(1, Math.floor(xSize / 20))
+    for (let x = 0; x < xSize; x += xLabelInterval) {
       ctx.fillText(
         x.toString(),
-        padding + x * cellWidth + cellWidth / 2,
-        padding + ySize * cellHeight + 20
+        padding.left + x * cellWidth + cellWidth / 2,
+        padding.top + plotHeight + 10
       )
     }
+    if (xSize > 0 && (xSize - 1) % xLabelInterval !== 0) {
+      ctx.fillText(
+        (xSize - 1).toString(),
+        padding.left + (xSize - 1) * cellWidth + cellWidth / 2,
+        padding.top + plotHeight + 10
+      )
+    }
+    
+    // Draw Y-axis labels (rotated)
     ctx.save()
-    ctx.translate(15, padding + plotHeight / 2)
+    ctx.translate(padding.left - 15, padding.top + plotHeight / 2)
     ctx.rotate(-Math.PI / 2)
     ctx.textAlign = 'center'
-    for (let y = 0; y < ySize; y++) {
+    ctx.textBaseline = 'middle'
+    const yLabelInterval = Math.max(1, Math.floor(ySize / 20))
+    for (let y = 0; y < ySize; y += yLabelInterval) {
       ctx.fillText(
         y.toString(),
         0,
-        y * cellHeight + cellHeight / 2
+        -plotHeight / 2 + y * cellHeight + cellHeight / 2
+      )
+    }
+    if (ySize > 0 && (ySize - 1) % yLabelInterval !== 0) {
+      ctx.fillText(
+        (ySize - 1).toString(),
+        0,
+        -plotHeight / 2 + (ySize - 1) * cellHeight + cellHeight / 2
       )
     }
     ctx.restore()
@@ -201,47 +235,124 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
     candidate: MapCandidate,
     fileData: Uint8Array
   ) => {
-    const padding = 40
-    const plotWidth = width - padding * 2
-    const plotHeight = height - padding * 2 - 100
-    const barWidth = plotWidth / xSize
+    const padding = { top: 60, right: 40, bottom: 60, left: 60 }
+    const plotWidth = width - padding.left - padding.right
+    const plotHeight = height - padding.top - padding.bottom
+    const barWidth = Math.max(2, plotWidth / xSize - 1) // Minimum 2px width, with 1px gap
 
     const dataStart = candidate.offset
     const dataEnd = Math.min(dataStart + candidate.size, fileData.length)
     const data = fileData.slice(dataStart, dataEnd)
 
-    // Draw bar chart
-    ctx.fillStyle = '#3b82f6'
+    // Find min/max for better visualization
+    let minValue = 255
+    let maxValue = 0
+    for (let i = 0; i < data.length && i < xSize; i++) {
+      if (data[i] < minValue) minValue = data[i]
+      if (data[i] > maxValue) maxValue = data[i]
+    }
+    const valueRange = maxValue - minValue || 1 // Avoid division by zero
+
+    // Draw grid lines
+    ctx.strokeStyle = '#1a1a1a'
+    ctx.lineWidth = 1
+    for (let i = 0; i <= 4; i++) {
+      const y = padding.top + (plotHeight / 4) * i
+      ctx.beginPath()
+      ctx.moveTo(padding.left, y)
+      ctx.lineTo(padding.left + plotWidth, y)
+      ctx.stroke()
+    }
+
+    // Draw axes
+    ctx.strokeStyle = '#404040'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    // Y-axis
+    ctx.moveTo(padding.left, padding.top)
+    ctx.lineTo(padding.left, padding.top + plotHeight)
+    // X-axis
+    ctx.lineTo(padding.left + plotWidth, padding.top + plotHeight)
+    ctx.stroke()
+
+    // Draw bars with gradient
     for (let x = 0; x < xSize && x < data.length; x++) {
       const value = data[x]
-      const barHeight = (value / 255) * plotHeight
+      // Normalize value to 0-1 range based on min/max
+      const normalizedValue = (value - minValue) / valueRange
+      const barHeight = normalizedValue * plotHeight
       
+      // Create gradient for each bar
+      const gradient = ctx.createLinearGradient(
+        padding.left + x * (barWidth + 1),
+        padding.top + plotHeight - barHeight,
+        padding.left + x * (barWidth + 1),
+        padding.top + plotHeight
+      )
+      
+      // Color based on value: blue (low) -> cyan -> yellow -> red (high)
+      const hue = 240 - (normalizedValue * 180) // 240 (blue) to 60 (yellow)
+      gradient.addColorStop(0, `hsl(${hue}, 70%, 60%)`)
+      gradient.addColorStop(1, `hsl(${hue}, 70%, 40%)`)
+      
+      ctx.fillStyle = gradient
       ctx.fillRect(
-        padding + x * barWidth,
-        padding + plotHeight - barHeight,
-        barWidth - 2,
+        padding.left + x * (barWidth + 1),
+        padding.top + plotHeight - barHeight,
+        barWidth,
+        barHeight
+      )
+      
+      // Add subtle border
+      ctx.strokeStyle = `hsla(${hue}, 70%, 50%, 0.3)`
+      ctx.lineWidth = 0.5
+      ctx.strokeRect(
+        padding.left + x * (barWidth + 1),
+        padding.top + plotHeight - barHeight,
+        barWidth,
         barHeight
       )
     }
 
-    // Draw axes
-    ctx.strokeStyle = '#666666'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(padding, padding)
-    ctx.lineTo(padding, padding + plotHeight)
-    ctx.lineTo(padding + plotWidth, padding + plotHeight)
-    ctx.stroke()
+    // Draw Y-axis labels (value scale)
+    ctx.fillStyle = '#888888'
+    ctx.font = '11px monospace'
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'middle'
+    for (let i = 0; i <= 4; i++) {
+      const y = padding.top + (plotHeight / 4) * (4 - i)
+      const value = minValue + (valueRange / 4) * i
+      ctx.fillText(
+        Math.round(value).toString(),
+        padding.left - 10,
+        y
+      )
+    }
 
-    // Draw labels
-    ctx.fillStyle = '#ffffff'
-    ctx.font = '12px monospace'
+    // Draw X-axis labels (index)
+    ctx.fillStyle = '#888888'
+    ctx.font = '11px monospace'
     ctx.textAlign = 'center'
-    for (let x = 0; x < xSize; x++) {
+    ctx.textBaseline = 'top'
+    
+    // Only show labels for every Nth value to avoid crowding
+    const labelInterval = Math.max(1, Math.floor(xSize / 20))
+    for (let x = 0; x < xSize; x += labelInterval) {
+      const xPos = padding.left + x * (barWidth + 1) + barWidth / 2
       ctx.fillText(
         x.toString(),
-        padding + x * barWidth + barWidth / 2,
-        padding + plotHeight + 20
+        xPos,
+        padding.top + plotHeight + 10
+      )
+    }
+    
+    // Always show the last label
+    if (xSize > 0 && (xSize - 1) % labelInterval !== 0) {
+      const lastX = padding.left + (xSize - 1) * (barWidth + 1) + barWidth / 2
+      ctx.fillText(
+        (xSize - 1).toString(),
+        lastX,
+        padding.top + plotHeight + 10
       )
     }
   }
@@ -293,8 +404,11 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
           Offset: {formatHexOffset(candidate.offset)} | 
           Size: {candidate.size} bytes | 
           Confidence: {candidate.confidence}% | 
-          Dimensions: {candidate.dimensions?.x}×{candidate.dimensions?.y}
-          {candidate.dimensions?.z ? `×${candidate.dimensions.z}` : ''}
+          Dimensions: {candidate.type === '1D' 
+            ? candidate.dimensions?.x 
+            : candidate.type === '3D'
+            ? `${candidate.dimensions?.x}×${candidate.dimensions?.y || 0}×${candidate.dimensions?.z || 0}`
+            : `${candidate.dimensions?.x}×${candidate.dimensions?.y || 0}`}
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -389,8 +503,11 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
           Offset: {formatHexOffset(candidate.offset)} | 
           Size: {candidate.size} bytes | 
           Confidence: {candidate.confidence}% | 
-          Dimensions: {candidate.dimensions.x}×{candidate.dimensions.y}
-          {candidate.dimensions.z ? `×${candidate.dimensions.z}` : ''}
+          Dimensions: {candidate.type === '1D' 
+            ? candidate.dimensions.x 
+            : candidate.type === '3D'
+            ? `${candidate.dimensions.x}×${candidate.dimensions.y || 0}×${candidate.dimensions.z || 0}`
+            : `${candidate.dimensions.x}×${candidate.dimensions.y || 0}`}
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">

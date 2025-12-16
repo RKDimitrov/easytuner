@@ -93,11 +93,11 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
   }, [selectedCandidate, rowVirtualizer, fileData])
 
   const content = (
-    <div
-      ref={parentRef}
-      className="h-full overflow-auto bg-card"
-      style={{ contain: 'strict' }}
-    >
+        <div
+          ref={parentRef}
+          className="h-full overflow-auto bg-card"
+          style={{ contain: 'strict' }}
+        >
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,

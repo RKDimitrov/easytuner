@@ -241,5 +241,5 @@ async def get_scan_results(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get scan results: {str(e)}"
-        )
+    )
 

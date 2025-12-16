@@ -57,47 +57,13 @@ export function Analysis() {
 
   // Convert backend candidate to frontend format
   const convertCandidate = (candidate: CandidateResponse): MapCandidate => {
-    let dimensions: { x: number; y: number; z?: number } | undefined
+    let dimensions: { x: number; y?: number; z?: number } | undefined
     
     // Extract dimensions from the dimensions field (preferred) or features
     const dims = candidate.dimensions || {}
     const features = candidate.features || {}
     
-    // Try to get dimensions from the dimensions field first
-    if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
-      // If we have estimated_elements, try to infer dimensions
-      if (dims.estimated_elements && !dims.x && !dims.width) {
-        // For 1D arrays, x = estimated_elements
-        if (candidate.pattern_type?.toLowerCase().includes('1d')) {
-          dimensions = { x: dims.estimated_elements }
-        } else {
-          // For 2D, try to infer square dimensions
-          const sqrt = Math.sqrt(dims.estimated_elements)
-          if (Number.isInteger(sqrt)) {
-            dimensions = { x: sqrt, y: sqrt }
-          } else {
-            // Fallback: use estimated_elements as x
-            dimensions = { x: dims.estimated_elements, y: 1 }
-          }
-        }
-      } else {
-        dimensions = {
-          x: dims.x || dims.width || dims.rows || 0,
-          y: dims.y || dims.height || dims.cols || 0,
-          z: dims.z || dims.depth
-        }
-      }
-    } else if (features.x_size || features.width) {
-      // Fallback to features if dimensions not available
-      dimensions = {
-        x: features.x_size || features.width || 0,
-        y: features.y_size || features.height || 0,
-        z: features.z_size || features.depth
-      }
-    }
-    
-    // Determine type from pattern_type
-    // Backend uses: '1d_array', '2d_table', 'unknown'
+    // Determine type first to handle dimensions correctly
     let type: '1D' | '2D' | '3D' = '2D'
     if (candidate.pattern_type) {
       const patternLower = candidate.pattern_type.toLowerCase()
@@ -109,6 +75,68 @@ export function Analysis() {
         type = '2D'
       }
     }
+    
+    // Try to get dimensions from the dimensions field first
+    if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
+      // If we have estimated_elements, try to infer dimensions
+      if (dims.estimated_elements && !dims.x && !dims.width) {
+        // For 1D arrays, x = estimated_elements, no y
+        if (type === '1D') {
+          dimensions = { x: dims.estimated_elements }
+        } else if (type === '2D') {
+          // For 2D, try to infer square dimensions
+          const sqrt = Math.sqrt(dims.estimated_elements)
+          if (Number.isInteger(sqrt)) {
+            dimensions = { x: sqrt, y: sqrt }
+          } else {
+            // Fallback: use estimated_elements as x, 1 as y
+            dimensions = { x: dims.estimated_elements, y: 1 }
+          }
+        } else if (type === '3D') {
+          // For 3D, try to infer cubic dimensions
+          const cubeRoot = Math.cbrt(dims.estimated_elements)
+          if (Number.isInteger(cubeRoot)) {
+            dimensions = { x: cubeRoot, y: cubeRoot, z: cubeRoot }
+          } else {
+            dimensions = { x: dims.estimated_elements, y: 1, z: 1 }
+          }
+        }
+      } else {
+        // We have explicit dimensions
+        if (type === '1D') {
+          // For 1D, only set x
+          dimensions = { x: dims.x || dims.width || dims.rows || dims.estimated_elements || 0 }
+        } else if (type === '2D') {
+          dimensions = {
+            x: dims.x || dims.width || dims.rows || 0,
+            y: dims.y || dims.height || dims.cols || 0
+          }
+        } else if (type === '3D') {
+          dimensions = {
+            x: dims.x || dims.width || dims.rows || 0,
+            y: dims.y || dims.height || dims.cols || 0,
+            z: dims.z || dims.depth
+          }
+        }
+      }
+    } else if (features.x_size || features.width) {
+      // Fallback to features if dimensions not available
+      if (type === '1D') {
+        dimensions = { x: features.x_size || features.width || 0 }
+      } else if (type === '2D') {
+        dimensions = {
+          x: features.x_size || features.width || 0,
+          y: features.y_size || features.height || 0
+        }
+      } else {
+        dimensions = {
+          x: features.x_size || features.width || 0,
+          y: features.y_size || features.height || 0,
+          z: features.z_size || features.depth
+        }
+      }
+    }
+    
     
     return {
       id: candidate.candidate_id,
@@ -124,8 +152,11 @@ export function Analysis() {
   useEffect(() => {
     if (scanId && candidates.length === 0 && !isScanning) {
       loadScanResults(scanId)
+    } else if (scanId && candidates.length > 0 && !scanComplete) {
+      // If candidates are already loaded (e.g., from ProjectDetail), mark scan as complete
+      setScanComplete(true)
     }
-  }, [scanId])
+  }, [scanId, candidates.length, isScanning, scanComplete])
 
   // Optional: Auto-switch to 3D view when a candidate is selected
   // Uncomment if you want automatic switching to 3D view on selection:
@@ -207,12 +238,12 @@ export function Analysis() {
       // Convert and set candidates
       const convertedCandidates = results.candidates.map(convertCandidate)
       setCandidates(convertedCandidates)
-      setIsScanning(false)
-      setScanComplete(true)
-
-      toast.success('Scan complete', {
+        setIsScanning(false)
+        setScanComplete(true)
+        
+        toast.success('Scan complete', {
         description: `Found ${results.total_candidates} candidate maps`
-      })
+        })
     } catch (error) {
       console.error('Scan failed:', error)
       

@@ -60,7 +60,7 @@ export function Header() {
                 (item.to !== '/dashboard' && location.pathname.startsWith(item.to))
               
               return (
-                <Link
+            <Link
                   key={item.to}
                   to={item.to}
                   className={cn(
@@ -72,7 +72,7 @@ export function Header() {
                 >
                   <Icon className="w-4 h-4" />
                   {item.label}
-                </Link>
+            </Link>
               )
             })}
           </nav>
