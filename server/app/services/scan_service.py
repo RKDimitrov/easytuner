@@ -378,6 +378,115 @@ class ScanService:
         )
         
         return list(result.scalars().all())
+    
+    async def copy_scan_results(
+        self,
+        db: AsyncSession,
+        source_file_id: UUID,
+        target_file_id: UUID,
+        user_id: UUID
+    ) -> Optional[ScanJob]:
+        """
+        Copy scan results from one file to another.
+        
+        This is used when a modified file is created - it inherits the scan
+        results from the original file since map locations don't change.
+        
+        Args:
+            db: Database session
+            source_file_id: UUID of source file (original)
+            target_file_id: UUID of target file (modified)
+            user_id: UUID of user (for access control)
+            
+        Returns:
+            New ScanJob with copied candidates, or None if no scan found
+        """
+        # Verify user has access to both files
+        source_result = await db.execute(
+            select(FirmwareFile)
+            .join(FirmwareFile.project)
+            .where(
+                FirmwareFile.file_id == source_file_id,
+                Project.owner_user_id == user_id,
+                FirmwareFile.deleted_at.is_(None)
+            )
+        )
+        source_file = source_result.scalar_one_or_none()
+        
+        if not source_file:
+            logger.warning(f"Source file {source_file_id} not found or access denied")
+            return None
+        
+        # Get latest completed scan from source file
+        latest_scan_result = await db.execute(
+            select(ScanJob)
+            .where(
+                ScanJob.file_id == source_file_id,
+                ScanJob.status == 'completed'
+            )
+            .order_by(ScanJob.created_at.desc())
+            .limit(1)
+        )
+        source_scan = latest_scan_result.scalar_one_or_none()
+        
+        if not source_scan:
+            logger.info(f"No completed scan found for source file {source_file_id}")
+            return None
+        
+        # Get all candidates from source scan
+        candidates_result = await db.execute(
+            select(Candidate)
+            .where(Candidate.scan_id == source_scan.scan_id)
+        )
+        source_candidates = list(candidates_result.scalars().all())
+        
+        if not source_candidates:
+            logger.info(f"No candidates found in source scan {source_scan.scan_id}")
+            return None
+        
+        # Create new scan job for target file
+        new_scan = ScanJob(
+            file_id=target_file_id,
+            status='completed',
+            scan_config={
+                **source_scan.scan_config,
+                'inherited_from': str(source_scan.scan_id),
+                'inherited_from_file': str(source_file_id)
+            },
+            started_at=source_scan.started_at,
+            completed_at=datetime.utcnow(),
+            processing_time_ms=0  # No processing time for copied scans
+        )
+        
+        db.add(new_scan)
+        await db.flush()  # Flush to get the scan_id
+        
+        # Copy all candidates
+        candidates_copied = 0
+        for source_candidate in source_candidates:
+            new_candidate = Candidate(
+                scan_id=new_scan.scan_id,
+                type=source_candidate.type,
+                confidence=source_candidate.confidence,
+                byte_offset_start=source_candidate.byte_offset_start,
+                byte_offset_end=source_candidate.byte_offset_end,
+                data_type=source_candidate.data_type,
+                dimensions=source_candidate.dimensions.copy() if source_candidate.dimensions else {},
+                feature_scores=source_candidate.feature_scores.copy() if source_candidate.feature_scores else {},
+                detection_method_version=source_candidate.detection_method_version
+            )
+            db.add(new_candidate)
+            candidates_copied += 1
+        
+        await db.commit()
+        await db.refresh(new_scan)
+        
+        logger.info(
+            f"Copied scan results from {source_file_id} to {target_file_id}: "
+            f"{candidates_copied} candidates copied"
+        )
+        
+        return new_scan
 
 
 # Singleton instance

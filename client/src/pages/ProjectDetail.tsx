@@ -703,26 +703,61 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
               </TableRow>
             </TableHeader>
             <TableBody>
-              {files.map((file) => (
+              {files.map((file) => {
+                // Check if file is a modified version
+                const isModified = /_v\d+/.test(file.filename)
+                const versionMatch = file.filename.match(/_v(\d+)/)
+                const version = versionMatch ? versionMatch[1] : null
+                
+                return (
                 <TableRow key={file.file_id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       <FileCode className="w-4 h-4 text-muted-foreground" />
-                      {file.filename}
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span>{file.filename}</span>
+                          {version && (
+                            <Badge variant="outline" className="text-xs">
+                              v{version}
+                            </Badge>
+                          )}
+                        </div>
+                        {isModified && (
+                          <span className="text-xs text-muted-foreground">
+                            Modified version
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>{formatBytes(file.size_bytes)}</TableCell>
-                  <TableCell>{formatRelativeTime(file.uploaded_at)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      {isModified ? (
+                        <>
+                          <span className="text-xs text-muted-foreground">
+                            Uploaded {formatRelativeTime(file.uploaded_at)}
+                          </span>
+                          <span>Modified {formatRelativeTime(file.updated_at)}</span>
+                        </>
+                      ) : (
+                        <span>Uploaded {formatRelativeTime(file.uploaded_at)}</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {file.has_scan ? (
                       <div className="flex flex-col gap-1">
                         <Badge variant="default" className="flex items-center gap-1 w-fit">
                           <CheckCircle2 className="w-3 h-3" />
-                          Scanned
+                          {isModified ? 'Inherited scan' : 'Scanned'}
                         </Badge>
                         {file.latest_scan_at && (
                           <span className="text-xs text-muted-foreground">
-                            {formatRelativeTime(file.latest_scan_at)}
+                            {isModified 
+                              ? `From original ${formatRelativeTime(file.latest_scan_at)}`
+                              : formatRelativeTime(file.latest_scan_at)}
                           </span>
                         )}
                       </div>
@@ -768,7 +803,8 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
             </TableBody>
           </Table>
       </CardContent>

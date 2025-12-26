@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAnalysisStore, MapCandidate } from '../store/analysisStore'
+import { useEditStore } from '../store/editStore'
 import { formatBytes } from '../lib/utils'
 import { toast } from '../hooks/use-toast'
 import { Card, CardContent } from '../components/ui/card'
@@ -12,6 +13,8 @@ import { HexViewer } from '../components/HexViewer'
 import { ResultsTable } from '../components/ResultsTable'
 import { Map3DViewer } from '../components/Map3DViewer'
 import { createScan, getScanResults, type CandidateResponse } from '../services/scanService'
+import { applyEdits, type EditOperation } from '../services/editService'
+import { downloadFile } from '../services/fileService'
 import { 
   FileCode, 
   Play, 
@@ -20,7 +23,8 @@ import {
   Loader2,
   CheckCircle2,
   Box,
-  Code2
+  Code2,
+  Save
 } from 'lucide-react'
 
 export function Analysis() {
@@ -39,7 +43,25 @@ export function Analysis() {
     scanId,
     setScanId,
     selectedCandidate,
+    setFileData,
   } = useAnalysisStore()
+  
+  // Use selectors to ensure reactivity
+  const edits = useEditStore((state) => state.edits)
+  const editCount = useEditStore((state) => state.editCount)
+  const isDirty = useEditStore((state) => state.isDirty)
+  const isSaving = useEditStore((state) => state.isSaving)
+  const setIsSaving = useEditStore((state) => state.setIsSaving)
+  const clearEdits = useEditStore((state) => state.clearEdits)
+  const resetEdits = useEditStore((state) => state.reset)
+  const setEditFile = useEditStore((state) => state.setFile)
+  
+  // Initialize edit store when file data is available
+  useEffect(() => {
+    if (fileData && fileId) {
+      setEditFile(fileId, fileData)
+    }
+  }, [fileData, fileId, setEditFile])
 
   const [scanComplete, setScanComplete] = useState(false)
   const [viewMode, setViewMode] = useState<'hex' | '3d'>('hex')
@@ -267,6 +289,48 @@ export function Analysis() {
       description: 'Coming soon! Will support JSON, CSV, and XML formats.'
     })
   }
+  
+  const handleSaveEdits = async () => {
+    if (!fileId || !edits || edits.size === 0) return
+    
+    setIsSaving(true)
+    
+    try {
+      // Convert edits to API format
+      const editOperations: EditOperation[] = Array.from(edits.values()).map(edit => ({
+        offset: edit.offset,
+        value: edit.value,
+        data_type: edit.dataType,
+        original_value: edit.originalValue,
+      }))
+      
+      // Apply edits and create new file version
+      const response = await applyEdits(fileId, editOperations, true)
+      
+      // Download the new file
+      const arrayBuffer = await downloadFile(response.file_id)
+      const newFileData = new Uint8Array(arrayBuffer)
+      
+      // Update analysis store with new file
+      setFileData(newFileData, fileName || 'file.bin', response.file_id)
+      
+      // Clear edits
+      clearEdits()
+      resetEdits()
+      
+      toast.success('File saved', {
+        description: `Created new file version with ${response.edits_applied} edit(s)`
+      })
+      
+    } catch (error) {
+      console.error('Failed to save edits:', error)
+      toast.error('Failed to save edits', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   if (!fileData) {
     return null // Will redirect in useEffect
@@ -301,6 +365,26 @@ export function Analysis() {
             </div>
             
             <div className="flex items-center gap-3">
+              {isDirty && editCount > 0 && (
+                <Button
+                  variant="default"
+                  onClick={handleSaveEdits}
+                  disabled={isSaving || !fileId}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Edits ({editCount})
+                    </>
+                  )}
+                </Button>
+              )}
+              
               {scanComplete && (
                 <Button
                   variant="outline"

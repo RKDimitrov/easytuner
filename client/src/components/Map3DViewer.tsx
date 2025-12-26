@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { MapCandidate } from '../store/analysisStore'
+import { useEditStore } from '../store/editStore'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { RotateCcw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
@@ -19,6 +20,11 @@ interface Map3DViewerProps {
 }
 
 export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewerProps) {
+  // Get modified file data from edit store (if available)
+  const { modifiedFileData } = useEditStore()
+  
+  // Use modified data if available, otherwise use original
+  const displayData = modifiedFileData || fileData
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [error, setError] = useState<string | null>(null)
@@ -45,15 +51,15 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
     ctx.fillStyle = '#0a0a0a'
     ctx.fillRect(0, 0, width, height)
 
-    // Draw visualization based on map type
+    // Draw visualization based on map type (use displayData which includes edits)
     if (candidate.type === '2D' && dimensions.x && dimensions.y) {
-      draw2DMap(ctx, width, height, dimensions.x, dimensions.y, candidate, fileData)
+      draw2DMap(ctx, width, height, dimensions.x, dimensions.y, candidate, displayData)
     } else if (candidate.type === '3D' && dimensions.x && dimensions.y && dimensions.z) {
-      draw3DMap(ctx, width, height, dimensions.x, dimensions.y, dimensions.z, candidate, fileData)
+      draw3DMap(ctx, width, height, dimensions.x, dimensions.y, dimensions.z, candidate, displayData)
     } else if (candidate.type === '1D' && dimensions.x) {
-      draw1DMap(ctx, width, height, dimensions.x, candidate, fileData)
+      draw1DMap(ctx, width, height, dimensions.x, candidate, displayData)
     }
-  }, [candidate, fileData])
+  }, [candidate, displayData])
 
   const draw2DMap = (
     ctx: CanvasRenderingContext2D,

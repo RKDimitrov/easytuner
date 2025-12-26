@@ -1,10 +1,12 @@
 import { useRef, useEffect, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAnalysisStore } from '../store/analysisStore'
+import { useEditStore, readValueFromData } from '../store/editStore'
 import { downloadFile } from '../services/fileService'
 import { formatHexOffset, byteToHex, isPrintableAscii, cn } from '../lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { toast } from '../hooks/use-toast'
+import { EditPanel } from './EditPanel'
 
 const BYTES_PER_ROW = 16
 
@@ -22,11 +24,18 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
   const bookmarks = useAnalysisStore((state) => state.bookmarks)
   const annotations = useAnalysisStore((state) => state.annotations)
   
+  // Edit store
+  const { modifiedFileData, edits, setFile: setEditFile } = useEditStore()
+  
   const parentRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [editOffset, setEditOffset] = useState<number | null>(null)
 
+  // Use modified file data if available, otherwise original
+  const displayData = modifiedFileData || fileData
+  
   // Calculate total rows
-  const totalRows = fileData ? Math.ceil(fileData.length / BYTES_PER_ROW) : 0
+  const totalRows = displayData ? Math.ceil(displayData.length / BYTES_PER_ROW) : 0
 
   // Virtualizer for rows
   const rowVirtualizer = useVirtualizer({
@@ -38,6 +47,16 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
 
   // Function to determine byte color based on state
   const getByteColor = (byteIndex: number) => {
+    // Check if this byte is part of an edit
+    const isEdited = Array.from(edits.values()).some(edit => {
+      const size = edit.dataType === 'u8' ? 1 : edit.dataType.includes('16') ? 2 : 4
+      return byteIndex >= edit.offset && byteIndex < edit.offset + size
+    })
+    
+    if (isEdited) {
+      return 'bg-yellow-500/30 text-yellow-700 dark:text-yellow-400 border border-yellow-500/50'
+    }
+    
     // Selected candidate (blue)
     if (
       selectedCandidate &&
@@ -63,6 +82,11 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
 
     return 'text-muted-foreground'
   }
+  
+  // Handle double-click on hex byte
+  const handleByteDoubleClick = (byteIndex: number) => {
+    setEditOffset(byteIndex)
+  }
 
   // Fetch file from backend if fileId exists but fileData doesn't
   useEffect(() => {
@@ -72,6 +96,10 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
         .then((arrayBuffer) => {
           const data = new Uint8Array(arrayBuffer)
           setFileData(data, fileName || 'file.bin', fileId)
+          // Initialize edit store
+          if (fileId) {
+            setEditFile(fileId, data)
+          }
           setIsLoading(false)
         })
         .catch((error) => {
@@ -82,16 +110,23 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
           setIsLoading(false)
         })
     }
-  }, [fileId, fileData, fileName, setFileData, isLoading])
+  }, [fileId, fileData, fileName, setFileData, isLoading, setEditFile])
+  
+  // Update edit store when file data changes
+  useEffect(() => {
+    if (fileData && fileId) {
+      setEditFile(fileId, fileData)
+    }
+  }, [fileData, fileId, setEditFile])
 
   // Auto-scroll to selected candidate
   useEffect(() => {
-    if (selectedCandidate && parentRef.current && fileData) {
+    if (selectedCandidate && parentRef.current && displayData) {
       const row = Math.floor(selectedCandidate.offset / BYTES_PER_ROW)
       rowVirtualizer.scrollToIndex(row, { align: 'center' })
     }
-  }, [selectedCandidate, rowVirtualizer, fileData])
-
+  }, [selectedCandidate, rowVirtualizer, displayData])
+  
   const content = (
         <div
           ref={parentRef}
@@ -107,7 +142,7 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const rowOffset = virtualRow.index * BYTES_PER_ROW
-              const rowBytes = fileData.slice(rowOffset, rowOffset + BYTES_PER_ROW)
+              const rowBytes = displayData ? displayData.slice(rowOffset, rowOffset + BYTES_PER_ROW) : new Uint8Array(0)
 
               return (
                 <div
@@ -136,10 +171,11 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
                           <span
                             key={colIndex}
                             className={cn(
-                              'hex-byte rounded px-0.5',
+                              'hex-byte rounded px-0.5 cursor-pointer hover:ring-2 hover:ring-ring',
                               getByteColor(byteIndex)
                             )}
-                            title={`Offset: ${formatHexOffset(byteIndex)}, Value: ${byte}`}
+                            title={`Offset: ${formatHexOffset(byteIndex)}, Value: ${byte} (Double-click to edit)`}
+                            onDoubleClick={() => handleByteDoubleClick(byteIndex)}
                           >
                             {byteToHex(byte)}
                           </span>
@@ -165,10 +201,16 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
               )
             })}
           </div>
+          
+          {/* Edit Panel */}
+          <EditPanel
+            offset={editOffset}
+            onClose={() => setEditOffset(null)}
+          />
         </div>
   )
 
-  if (!fileData) {
+  if (!displayData) {
     const emptyContent = (
       <div className="h-full flex items-center justify-center">
         {isLoading ? (
