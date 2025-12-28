@@ -4,6 +4,8 @@ from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel, Field
 
+from app.schemas.checksum import ChecksumConfigRequest
+
 
 class EditOperation(BaseModel):
     """A single edit operation on a binary file."""
@@ -28,6 +30,10 @@ class EditBatchRequest(BaseModel):
     create_new_version: bool = Field(
         default=True,
         description="Create a new file version instead of overwriting"
+    )
+    checksum_config: Optional[ChecksumConfigRequest] = Field(
+        default=None,
+        description="Optional checksum configuration to update after edits"
     )
 
 

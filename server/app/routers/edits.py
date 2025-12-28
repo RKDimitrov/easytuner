@@ -23,6 +23,24 @@ from app.schemas.edit import (
 from app.services.edit_service import edit_service
 from app.services.file_storage import file_storage
 from app.services.scan_service import scan_service
+from app.services.checksum_service import ChecksumAlgorithm as ChecksumAlgorithmEnum, ChecksumConfig, checksum_service
+
+
+def _convert_algorithm(algorithm: str) -> ChecksumAlgorithmEnum:
+    """Convert string algorithm to enum."""
+    algorithm_map = {
+        "simple_sum": ChecksumAlgorithmEnum.SIMPLE_SUM,
+        "crc16": ChecksumAlgorithmEnum.CRC16,
+        "crc32": ChecksumAlgorithmEnum.CRC32,
+        "xor": ChecksumAlgorithmEnum.XOR,
+        "twos_complement": ChecksumAlgorithmEnum.TWOS_COMPLEMENT,
+        "modular": ChecksumAlgorithmEnum.MODULAR,
+    }
+    
+    if algorithm not in algorithm_map:
+        raise ValueError(f"Unknown algorithm: {algorithm}")
+    
+    return algorithm_map[algorithm]
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +109,32 @@ async def apply_edits(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Some edits failed: {'; '.join(error_messages)}"
             )
+        
+        # Update checksum if configuration provided
+        if request.checksum_config:
+            try:
+                # Convert request to service config
+                exclude_ranges = None
+                if request.checksum_config.exclude_ranges:
+                    exclude_ranges = [(r.start, r.end) for r in request.checksum_config.exclude_ranges]
+                
+                checksum_config = ChecksumConfig(
+                    algorithm=_convert_algorithm(request.checksum_config.algorithm),
+                    checksum_range=(request.checksum_config.checksum_range.start, request.checksum_config.checksum_range.end),
+                    checksum_location=request.checksum_config.checksum_location,
+                    checksum_size=request.checksum_config.checksum_size,
+                    endianness=request.checksum_config.endianness,
+                    exclude_ranges=exclude_ranges,
+                    modulo=request.checksum_config.modulo
+                )
+                
+                # Update checksum in modified data
+                modified_data = checksum_service.update_checksum(bytearray(modified_data), checksum_config)
+                logger.info(f"Updated checksum for file {file_id} after applying edits")
+            except Exception as e:
+                logger.warning(f"Failed to update checksum for file {file_id}: {e}", exc_info=True)
+                # Don't fail the edit operation if checksum update fails
+                # User can update checksum separately if needed
         
         # Calculate new hash
         new_hash = hashlib.sha256(modified_data).hexdigest()

@@ -4,11 +4,10 @@ Checksum service for ECU firmware files.
 This service handles checksum calculation and validation for ECU binary files.
 Different ECU manufacturers use different checksum algorithms, so this service
 is designed to be extensible.
-
-TODO: Implement checksum algorithms based on ECU type detection or user configuration.
 """
 
 import logging
+import struct
 from typing import Optional, Tuple
 from enum import Enum
 
@@ -58,7 +57,83 @@ class ChecksumService:
     
     def __init__(self):
         """Initialize the checksum service."""
-        pass
+        # CRC-16-CCITT polynomial: x^16 + x^12 + x^5 + 1 (0x1021)
+        self.crc16_table = self._generate_crc16_table()
+        
+        # CRC-32 polynomial: x^32 + x^26 + x^23 + x^22 + x^16 + x^12 + x^11 + x^10 + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1 (0xEDB88320)
+        self.crc32_table = self._generate_crc32_table()
+    
+    def _generate_crc16_table(self) -> list[int]:
+        """Generate CRC-16 lookup table (CCITT polynomial)."""
+        table = []
+        polynomial = 0x1021  # CRC-16-CCITT
+        
+        for i in range(256):
+            crc = i << 8
+            for _ in range(8):
+                if crc & 0x8000:
+                    crc = (crc << 1) ^ polynomial
+                else:
+                    crc = crc << 1
+                crc = crc & 0xFFFF
+            table.append(crc)
+        
+        return table
+    
+    def _generate_crc32_table(self) -> list[int]:
+        """Generate CRC-32 lookup table (IEEE 802.3 polynomial)."""
+        table = []
+        polynomial = 0xEDB88320
+        
+        for i in range(256):
+            crc = i
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ polynomial
+                else:
+                    crc = crc >> 1
+            table.append(crc & 0xFFFFFFFF)
+        
+        return table
+    
+    def _calculate_crc16(self, data: bytearray) -> int:
+        """
+        Calculate CRC-16-CCITT checksum.
+        
+        Args:
+            data: Data to checksum
+            
+        Returns:
+            CRC-16 value
+        """
+        crc = 0xFFFF  # Initial value
+        
+        for byte in data:
+            index = ((crc >> 8) ^ byte) & 0xFF
+            crc = ((crc << 8) ^ self.crc16_table[index]) & 0xFFFF
+        
+        return crc
+    
+    def _calculate_crc32(self, data: bytearray) -> int:
+        """
+        Calculate CRC-32 checksum (IEEE 802.3).
+        
+        Args:
+            data: Data to checksum
+            
+        Returns:
+            CRC-32 value
+        """
+        crc = 0xFFFFFFFF  # Initial value
+        
+        for byte in data:
+            index = (crc ^ byte) & 0xFF
+            crc = (crc >> 8) ^ self.crc32_table[index]
+        
+        # Final XOR
+        crc = crc ^ 0xFFFFFFFF
+        
+        return crc & 0xFFFFFFFF
     
     def calculate_checksum(
         self,
@@ -125,12 +200,10 @@ class ChecksumService:
             return total % modulo
         
         elif config.algorithm == ChecksumAlgorithm.CRC16:
-            # TODO: Implement CRC-16
-            raise NotImplementedError("CRC-16 not yet implemented")
+            return self._calculate_crc16(data_to_checksum)
         
         elif config.algorithm == ChecksumAlgorithm.CRC32:
-            # TODO: Implement CRC-32
-            raise NotImplementedError("CRC-32 not yet implemented")
+            return self._calculate_crc32(data_to_checksum)
         
         else:
             raise ValueError(f"Unknown checksum algorithm: {config.algorithm}")

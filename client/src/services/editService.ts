@@ -36,9 +36,26 @@ export interface EditOperation {
   original_value?: number
 }
 
+export interface ChecksumConfig {
+  algorithm: 'simple_sum' | 'crc16' | 'crc32' | 'xor' | 'twos_complement' | 'modular'
+  checksum_range: {
+    start: number
+    end: number
+  }
+  checksum_location: number
+  checksum_size?: number
+  endianness?: 'little' | 'big'
+  exclude_ranges?: Array<{
+    start: number
+    end: number
+  }>
+  modulo?: number
+}
+
 export interface EditBatchRequest {
   edits: EditOperation[]
   create_new_version?: boolean
+  checksum_config?: ChecksumConfig
 }
 
 export interface EditResponse {
@@ -62,16 +79,24 @@ export interface ReadValueResponse {
 export async function applyEdits(
   fileId: string,
   edits: EditOperation[],
-  createNewVersion: boolean = true
+  createNewVersion: boolean = true,
+  checksumConfig?: ChecksumConfig
 ): Promise<EditResponse> {
   try {
     const api = createAuthAxios()
+    const requestBody: any = {
+      edits,
+      create_new_version: createNewVersion,
+    }
+    
+    // Only include checksum_config if it's provided
+    if (checksumConfig) {
+      requestBody.checksum_config = checksumConfig
+    }
+    
     const response = await api.post<EditResponse>(
       `/files/${fileId}/edits`,
-      {
-        edits,
-        create_new_version: createNewVersion,
-      }
+      requestBody
     )
     return response.data
   } catch (error) {

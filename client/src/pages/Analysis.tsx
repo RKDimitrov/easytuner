@@ -12,9 +12,14 @@ import { Header } from '../components/Header'
 import { HexViewer } from '../components/HexViewer'
 import { ResultsTable } from '../components/ResultsTable'
 import { Map3DViewer } from '../components/Map3DViewer'
+import { ChecksumConfigDialog } from '../components/ChecksumConfigDialog'
+import { ChecksumStatus } from '../components/ChecksumStatus'
+import { ChecksumTester } from '../components/ChecksumTester'
+import { ExportDialog } from '../components/ExportDialog'
 import { createScan, getScanResults, type CandidateResponse } from '../services/scanService'
-import { applyEdits, type EditOperation } from '../services/editService'
+import { applyEdits, type EditOperation, type ChecksumConfig } from '../services/editService'
 import { downloadFile } from '../services/fileService'
+import { validateChecksum, type ChecksumValidationResponse } from '../services/checksumService'
 import { 
   FileCode, 
   Play, 
@@ -24,7 +29,8 @@ import {
   CheckCircle2,
   Box,
   Code2,
-  Save
+  Save,
+  Shield
 } from 'lucide-react'
 
 export function Analysis() {
@@ -65,6 +71,11 @@ export function Analysis() {
 
   const [scanComplete, setScanComplete] = useState(false)
   const [viewMode, setViewMode] = useState<'hex' | '3d'>('hex')
+  const [checksumConfig, setChecksumConfig] = useState<ChecksumConfig | null>(null)
+  const [showChecksumDialog, setShowChecksumDialog] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [checksumValidation, setChecksumValidation] = useState<ChecksumValidationResponse | null>(null)
+  const [isValidatingChecksum, setIsValidatingChecksum] = useState(false)
 
   // Redirect if no file loaded (check both fileData and fileId)
   // Don't redirect if fileId exists - HexViewer will load it
@@ -283,11 +294,54 @@ export function Analysis() {
     }
   }
 
+  const handleExportClick = async () => {
+    // Validate checksum before showing export dialog
+    if (checksumConfig && fileId) {
+      setIsValidatingChecksum(true)
+      try {
+        const validation = await validateChecksum(fileId, checksumConfig)
+        setChecksumValidation(validation)
+      } catch (error) {
+        console.error('Failed to validate checksum:', error)
+        setChecksumValidation(null)
+      } finally {
+        setIsValidatingChecksum(false)
+      }
+    } else {
+      setChecksumValidation(null)
+    }
+    setShowExportDialog(true)
+  }
+
   const handleExport = async () => {
-    // TODO: Implement export functionality
-    toast.info('Export feature', {
-      description: 'Coming soon! Will support JSON, CSV, and XML formats.'
-    })
+    if (!fileId) return
+
+    try {
+      // Download the file
+      const arrayBuffer = await downloadFile(fileId)
+      const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' })
+      
+      // Create download link
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName || 'firmware.bin'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      toast.success('File exported', {
+        description: `${fileName} has been downloaded to your computer`
+      })
+
+      setShowExportDialog(false)
+    } catch (error) {
+      console.error('Failed to export file:', error)
+      toast.error('Export failed', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
+      })
+    }
   }
   
   const handleSaveEdits = async () => {
@@ -304,8 +358,8 @@ export function Analysis() {
         original_value: edit.originalValue,
       }))
       
-      // Apply edits and create new file version
-      const response = await applyEdits(fileId, editOperations, true)
+      // Apply edits and create new file version (with checksum if configured)
+      const response = await applyEdits(fileId, editOperations, true, checksumConfig || undefined)
       
       // Download the new file
       const arrayBuffer = await downloadFile(response.file_id)
@@ -318,8 +372,9 @@ export function Analysis() {
       clearEdits()
       resetEdits()
       
+      const checksumMsg = checksumConfig ? ' (checksum updated)' : ''
       toast.success('File saved', {
-        description: `Created new file version with ${response.edits_applied} edit(s)`
+        description: `Created new file version with ${response.edits_applied} edit(s)${checksumMsg}`
       })
       
     } catch (error) {
@@ -365,6 +420,15 @@ export function Analysis() {
             </div>
             
             <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowChecksumDialog(true)}
+                disabled={isSaving || !fileId}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Configure Checksum
+              </Button>
+              
               {isDirty && editCount > 0 && (
                 <Button
                   variant="default"
@@ -380,21 +444,20 @@ export function Analysis() {
                     <>
                       <Save className="w-4 h-4 mr-2" />
                       Save Edits ({editCount})
+                      {checksumConfig && ' + Checksum'}
                     </>
                   )}
                 </Button>
               )}
               
-              {scanComplete && (
-                <Button
-                  variant="outline"
-                  onClick={handleExport}
-                  disabled={candidates.length === 0}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                onClick={handleExportClick}
+                disabled={!fileId}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
               
               <Button
                 onClick={startScan}
@@ -439,7 +502,7 @@ export function Analysis() {
       </div>
 
       {/* Main content */}
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-6 space-y-4">
         {!scanComplete && candidates.length === 0 ? (
           <Card className="h-[calc(100vh-200px)] flex items-center justify-center">
             <CardContent className="text-center space-y-4">
@@ -527,7 +590,52 @@ export function Analysis() {
             </Card>
           </div>
         )}
+
+        {/* Checksum Section - Below Analysis and Viewer */}
+        {fileId && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <ChecksumStatus
+              config={checksumConfig}
+              onConfigChange={() => setShowChecksumDialog(true)}
+            />
+            <ChecksumTester
+              fileSize={fileSize}
+              onConfigFound={(config) => {
+                setChecksumConfig(config)
+                toast.success('Checksum configuration applied', {
+                  description: 'Valid configuration found and applied automatically'
+                })
+              }}
+            />
+          </div>
+        )}
       </div>
+
+      {/* Checksum Configuration Dialog */}
+      <ChecksumConfigDialog
+        open={showChecksumDialog}
+        onClose={() => setShowChecksumDialog(false)}
+        onSave={(config) => {
+          setChecksumConfig(config)
+          setShowChecksumDialog(false)
+          toast.success('Checksum configuration saved', {
+            description: 'Checksum will be updated when you save edits'
+          })
+        }}
+        fileSize={fileSize}
+        defaultConfig={checksumConfig || undefined}
+      />
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        onExport={handleExport}
+        checksumConfig={checksumConfig}
+        validationResult={checksumValidation}
+        isValidating={isValidatingChecksum}
+        fileName={fileName || 'firmware.bin'}
+      />
     </div>
   )
 }
