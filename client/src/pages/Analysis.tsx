@@ -90,10 +90,10 @@ export function Analysis() {
 
   // Convert backend candidate to frontend format
   const convertCandidate = (candidate: CandidateResponse): MapCandidate => {
-    let dimensions: { x: number; y?: number; z?: number } | undefined
+    let dimensions: { x: number; y: number; z?: number } | undefined
     
-    // Extract dimensions from the dimensions field (preferred) or features
-    const dims = candidate.dimensions || {}
+    // Extract dimensions from features (CandidateResponse uses features, not dimensions)
+    const dims: any = {}
     const features = candidate.features || {}
     
     // Determine type first to handle dimensions correctly
@@ -113,9 +113,9 @@ export function Analysis() {
     if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
       // If we have estimated_elements, try to infer dimensions
       if (dims.estimated_elements && !dims.x && !dims.width) {
-        // For 1D arrays, x = estimated_elements, no y
+        // For 1D arrays, don't set dimensions (MapCandidate requires y for dimensions)
         if (type === '1D') {
-          dimensions = { x: dims.estimated_elements }
+          dimensions = undefined
         } else if (type === '2D') {
           // For 2D, try to infer square dimensions
           const sqrt = Math.sqrt(dims.estimated_elements)
@@ -137,8 +137,8 @@ export function Analysis() {
       } else {
         // We have explicit dimensions
         if (type === '1D') {
-          // For 1D, only set x
-          dimensions = { x: dims.x || dims.width || dims.rows || dims.estimated_elements || 0 }
+          // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
+          dimensions = undefined
         } else if (type === '2D') {
           dimensions = {
             x: dims.x || dims.width || dims.rows || 0,
@@ -155,7 +155,8 @@ export function Analysis() {
     } else if (features.x_size || features.width) {
       // Fallback to features if dimensions not available
       if (type === '1D') {
-        dimensions = { x: features.x_size || features.width || 0 }
+        // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
+        dimensions = undefined
       } else if (type === '2D') {
         dimensions = {
           x: features.x_size || features.width || 0,
@@ -238,14 +239,12 @@ export function Analysis() {
       setScanProgress(10)
       
       // Simulate progress while waiting for scan to complete
+      let currentProgress = 10
       progressInterval = setInterval(() => {
-        setScanProgress((prev) => {
-          // Ensure prev is a valid number
-          const currentProgress = typeof prev === 'number' && !isNaN(prev) ? prev : 10
-          // Gradually increase progress, but cap at 90% until complete
-          const newProgress = Math.min(currentProgress + Math.random() * 5, 90)
-          return Math.max(0, Math.min(100, newProgress)) // Ensure between 0 and 100
-        })
+        // Gradually increase progress, but cap at 90% until complete
+        currentProgress = Math.min(currentProgress + Math.random() * 5, 90)
+        currentProgress = Math.max(0, Math.min(100, currentProgress)) // Ensure between 0 and 100
+        setScanProgress(currentProgress)
       }, 200)
 
       const scanResponse = await createScan({

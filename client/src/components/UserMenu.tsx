@@ -16,7 +16,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
-import { Button } from './ui/button'
 import { toast } from 'sonner'
 
 export function UserMenu() {

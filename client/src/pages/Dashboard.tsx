@@ -13,8 +13,6 @@ import { useProjectStore } from '../store/projectStore'
 import { 
   FileCode, 
   Activity, 
-  TrendingUp, 
-  Clock,
   Plus,
   ArrowRight,
   FolderOpen

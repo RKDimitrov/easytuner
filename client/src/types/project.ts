@@ -36,3 +36,12 @@ export interface ProjectsResponse {
 
 export type SortOption = 'lastModified' | 'name' | 'created'
 
+export interface ProjectFilters {
+  search: string
+  dateRange: 'all' | 'today' | 'week' | 'month' | 'year' | 'custom'
+  customDateFrom?: string
+  customDateTo?: string
+  fileCount: 'all' | '0' | '1-5' | '6-10' | '10+'
+  privacy: 'all' | 'private' | 'public'
+}
+

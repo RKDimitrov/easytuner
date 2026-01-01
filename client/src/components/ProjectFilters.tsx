@@ -10,8 +10,6 @@ import { useSearchParams } from 'react-router-dom'
 import { 
   Filter, 
   X, 
-  Calendar, 
-  FileText, 
   Lock, 
   Unlock,
   ChevronDown,
@@ -29,16 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select'
-import { Switch } from './ui/switch'
-
-export interface ProjectFilters {
-  search: string
-  dateRange: 'all' | 'today' | 'week' | 'month' | 'year' | 'custom'
-  customDateFrom?: string
-  customDateTo?: string
-  fileCount: 'all' | '0' | '1-5' | '6-10' | '10+'
-  privacy: 'all' | 'private' | 'public'
-}
+import type { ProjectFilters } from '../types/project'
 
 interface ProjectFiltersProps {
   onFiltersChange: (filters: ProjectFilters) => void
@@ -389,7 +378,7 @@ export function ProjectFilters({ onFiltersChange, resultCount, totalCount }: Pro
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <DateRangeFilter
                 value={filters.dateRange}
-                onChange={(value) => updateFilter('dateRange', value)}
+                onChange={(value) => updateFilter('dateRange', value as ProjectFilters['dateRange'])}
                 customFrom={filters.customDateFrom}
                 customTo={filters.customDateTo}
                 onCustomChange={(field, value) => {
@@ -403,12 +392,12 @@ export function ProjectFilters({ onFiltersChange, resultCount, totalCount }: Pro
               
               <FileCountFilter
                 value={filters.fileCount}
-                onChange={(value) => updateFilter('fileCount', value)}
+                onChange={(value) => updateFilter('fileCount', value as ProjectFilters['fileCount'])}
               />
               
               <PrivacyFilter
                 value={filters.privacy}
-                onChange={(value) => updateFilter('privacy', value)}
+                onChange={(value) => updateFilter('privacy', value as ProjectFilters['privacy'])}
               />
             </div>
           </CardContent>

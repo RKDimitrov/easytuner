@@ -7,11 +7,12 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Folder, AlertCircle, RefreshCw } from 'lucide-react'
+import { Plus, Folder, AlertCircle, RefreshCw, Search as SearchIcon } from 'lucide-react'
 import { Header } from '../components/Header'
 import { ProjectCard } from '../components/ProjectCard'
 import { CreateProjectModal } from '../components/CreateProjectModal'
-import { ProjectFilters, ProjectFilters as ProjectFiltersType } from '../components/ProjectFilters'
+import { ProjectFilters } from '../components/ProjectFilters'
+import type { ProjectFilters as ProjectFiltersType } from '../types/project'
 import { Button } from '../components/ui/button'
 import { Card, CardHeader, CardContent } from '../components/ui/card'
 import { Skeleton } from '../components/ui/skeleton'
@@ -52,7 +53,7 @@ function EmptyProjectsState({ onCreateClick }: { onCreateClick: () => void }) {
 function EmptySearchState({ searchTerm }: { searchTerm: string }) {
   return (
     <Card className="p-12 text-center">
-      <Search className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+      <SearchIcon className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
       <h3 className="text-xl font-semibold mb-2">No projects found</h3>
       <p className="text-muted-foreground">
         No projects match "{searchTerm}"
@@ -257,7 +258,7 @@ export function ProjectDashboard() {
       <CreateProjectModal
         open={showCreateModal || !!editingProject}
         onOpenChange={handleModalClose}
-        project={editingProject}
+        project={editingProject || undefined}
         onSuccess={handleModalSuccess}
       />
     </div>

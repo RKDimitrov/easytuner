@@ -10,7 +10,7 @@ import { Search, Plus, Folder, FolderOpen } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Card, CardContent } from './ui/card'
 import {
   Select,
   SelectContent,
@@ -62,7 +62,6 @@ export function ProjectSelector({ onProjectChange, disabled = false }: ProjectSe
   const { selectedProject, setSelectedProject, lastUsedProject } = useUploadStore()
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
 
   // Fetch projects on mount
   useEffect(() => {
@@ -94,7 +93,6 @@ export function ProjectSelector({ onProjectChange, disabled = false }: ProjectSe
         onProjectChange?.(project)
       }
     }
-    setIsOpen(false)
   }
 
   // Handle project creation
@@ -103,9 +101,9 @@ export function ProjectSelector({ onProjectChange, disabled = false }: ProjectSe
   }
 
   // Handle modal success
-  const handleModalSuccess = (newProject: Project) => {
-    setSelectedProject(newProject)
-    onProjectChange?.(newProject)
+  const handleModalSuccess = () => {
+    // Refresh projects to get the newly created one
+    fetchProjects()
     setShowCreateModal(false)
   }
 

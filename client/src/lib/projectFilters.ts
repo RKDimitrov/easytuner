@@ -5,8 +5,7 @@
  * file counts, privacy settings, and search functionality.
  */
 
-import { Project, SortOption } from '../types/project'
-import { ProjectFilters } from './ProjectFilters'
+import { Project, SortOption, ProjectFilters } from '../types/project'
 
 /**
  * Check if a project matches the date range filter

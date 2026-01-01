@@ -6,7 +6,7 @@
  */
 
 import { Project } from '../types/project'
-import { ProjectFilters } from '../components/ProjectFilters'
+import { ProjectFilters } from '../types/project'
 import { filterProjects, sortProjects } from '../lib/projectFilters'
 
 // Test data
@@ -154,7 +154,7 @@ export function testCombinedFilters() {
   const filters: ProjectFilters = {
     search: 'analysis',
     dateRange: 'all',
-    fileCount: '5+',
+    fileCount: '10+',
     privacy: 'all'
   }
   

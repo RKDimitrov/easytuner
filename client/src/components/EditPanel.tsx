@@ -20,7 +20,6 @@ import {
   DialogTitle,
 } from './ui/dialog'
 import { formatHexOffset } from '../lib/utils'
-import { X } from 'lucide-react'
 
 interface EditPanelProps {
   offset: number | null

@@ -51,8 +51,7 @@ function generateProjectId(): string {
  * GET /api/v1/projects
  */
 export async function getProjects(
-  limit?: number,
-  cursor?: string
+  limit?: number
 ): Promise<ProjectsResponse> {
   try {
     // Simulate API delay
@@ -192,7 +191,7 @@ export async function deleteProject(projectId: string): Promise<void> {
 /**
  * Add a file to a project (for upload integration)
  */
-export async function addFileToProject(projectId: string, fileName: string): Promise<void> {
+export async function addFileToProject(projectId: string): Promise<void> {
   try {
     const projects = getStoredProjects()
     const projectIndex = projects.findIndex(p => p.project_id === projectId)

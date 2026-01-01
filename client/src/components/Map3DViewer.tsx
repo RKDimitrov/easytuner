@@ -9,7 +9,7 @@ import { MapCandidate } from '../store/analysisStore'
 import { useEditStore } from '../store/editStore'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
-import { RotateCcw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { RotateCcw, Maximize2 } from 'lucide-react'
 import { formatHexOffset } from '../lib/utils'
 
 interface Map3DViewerProps {
@@ -27,8 +27,8 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
   const displayData = modifiedFileData || fileData
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [error, _setError] = useState<string | null>(null)
+  const [_isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current || !candidate.dimensions) {

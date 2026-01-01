@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Button } from './ui/button'
 import {
   Dialog,
@@ -31,21 +30,16 @@ export function ExportDialog({
   isValidating,
   fileName,
 }: ExportDialogProps) {
-  const [forceExport, setForceExport] = useState(false)
-
   const handleExport = () => {
-    setForceExport(false)
     onExport()
   }
 
   const handleForceExport = () => {
-    setForceExport(true)
     onExport()
   }
 
   // Reset force export when dialog closes
   const handleClose = () => {
-    setForceExport(false)
     onClose()
   }
 

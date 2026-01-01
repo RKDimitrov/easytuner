@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAnalysisStore } from '../store/analysisStore'
-import { useEditStore, readValueFromData } from '../store/editStore'
+import { useEditStore } from '../store/editStore'
 import { downloadFile } from '../services/fileService'
 import { formatHexOffset, byteToHex, isPrintableAscii, cn } from '../lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'

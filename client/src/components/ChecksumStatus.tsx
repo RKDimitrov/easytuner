@@ -14,7 +14,7 @@ interface ChecksumStatusProps {
   onConfigChange?: () => void
 }
 
-export function ChecksumStatus({ config, onConfigChange }: ChecksumStatusProps) {
+export function ChecksumStatus({ config }: ChecksumStatusProps) {
   const fileId = useAnalysisStore((state) => state.fileId)
   const [validation, setValidation] = useState<ChecksumValidationResponse | null>(null)
   const [isValidating, setIsValidating] = useState(false)

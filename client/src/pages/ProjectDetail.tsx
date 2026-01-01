@@ -23,7 +23,6 @@ import { Label } from '../components/ui/label'
 import { Switch } from '../components/ui/switch'
 import { useProjectStore } from '../store/projectStore'
 import { useAnalysisStore } from '../store/analysisStore'
-import { useAuthStore } from '../store/authStore'
 import { Project, UpdateProjectData } from '../types/project'
 import { getProjectFiles, ProjectFile, downloadFile, deleteFile as deleteFileService, uploadFile } from '../services/fileService'
 import { updateProject } from '../services/projectService'
@@ -58,7 +57,6 @@ function formatRelativeTime(timestamp: string): string {
  * Project Header Component
  */
 function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: Project; onProjectUpdate: () => void; onUploadClick: () => void }) {
-  const navigate = useNavigate()
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editName, setEditName] = useState(project.name)
   const [editDescription, setEditDescription] = useState(project.description || '')
@@ -243,7 +241,6 @@ function UploadFileDialog({
   onUploadComplete: () => void;
 }) {
   const { setFileData } = useAnalysisStore()
-  const { accessToken } = useAuthStore()
   const { isUploading, uploadProgress, uploadError, setIsUploading, setUploadProgress, setUploadError } = useUploadStore()
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -452,7 +449,6 @@ function UploadFileDialog({
 function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Project; onProjectUpdate: () => void; onUploadClick?: () => void }) {
   const navigate = useNavigate()
   const { setFileData, setCandidates, setScanId } = useAnalysisStore()
-  const { accessToken } = useAuthStore()
   const [files, setFiles] = useState<ProjectFile[]>([])
   const [loading, setLoading] = useState(true)
   const [openingFileId, setOpeningFileId] = useState<string | null>(null)
@@ -499,10 +495,10 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
           
           // Convert candidates to MapCandidate format (same logic as Analysis.tsx)
           const convertCandidate = (c: CandidateResponse) => {
-            let dimensions: { x: number; y?: number; z?: number } | undefined
+            let dimensions: { x: number; y: number; z?: number } | undefined
             
-            // Extract dimensions from the dimensions field (preferred) or features
-            const dims = c.dimensions || {}
+            // Extract dimensions from features (CandidateResponse uses features, not dimensions)
+            const dims: any = {}
             const features = c.features || {}
             
             // Determine type first to handle dimensions correctly
@@ -522,9 +518,9 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
             if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
               // If we have estimated_elements, try to infer dimensions
               if (dims.estimated_elements && !dims.x && !dims.width) {
-                // For 1D arrays, x = estimated_elements, no y
+                // For 1D arrays, don't set dimensions (MapCandidate requires y for dimensions)
                 if (type === '1D') {
-                  dimensions = { x: dims.estimated_elements }
+                  dimensions = undefined
                 } else if (type === '2D') {
                   // For 2D, try to infer square dimensions
                   const sqrt = Math.sqrt(dims.estimated_elements)
@@ -546,8 +542,8 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
               } else {
                 // We have explicit dimensions
                 if (type === '1D') {
-                  // For 1D, only set x
-                  dimensions = { x: dims.x || dims.width || dims.rows || dims.estimated_elements || 0 }
+                  // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
+                  dimensions = undefined
                 } else if (type === '2D') {
                   dimensions = {
                     x: dims.x || dims.width || dims.rows || 0,
@@ -564,7 +560,8 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
             } else if (features.x_size || features.width) {
               // Fallback to features if dimensions not available
               if (type === '1D') {
-                dimensions = { x: features.x_size || features.width || 0 }
+                // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
+                dimensions = undefined
               } else if (type === '2D') {
                 dimensions = {
                   x: features.x_size || features.width || 0,
@@ -843,7 +840,7 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
 /**
  * Scans Tab Content
  */
-function ScansTab({ project }: { project: Project }) {
+function ScansTab() {
   return (
     <Card>
       <CardHeader>
@@ -862,7 +859,7 @@ function ScansTab({ project }: { project: Project }) {
 /**
  * Settings Tab Content
  */
-function SettingsTab({ project }: { project: Project }) {
+function SettingsTab() {
   return (
     <Card>
       <CardHeader>
@@ -1052,11 +1049,11 @@ export function ProjectDetail() {
           </TabsContent>
 
           <TabsContent value="scans">
-            <ScansTab project={project} />
+            <ScansTab />
           </TabsContent>
 
           <TabsContent value="settings">
-            <SettingsTab project={project} />
+            <SettingsTab />
           </TabsContent>
         </Tabs>
       </div>

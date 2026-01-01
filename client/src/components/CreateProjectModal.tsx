@@ -67,7 +67,7 @@ export function CreateProjectModal({
   const [isLoading, setIsLoading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const { createProject, updateProject, deleteProject } = useProjectStore()
-  const { toast } = useToast()
+  const { success, error: showError } = useToast()
 
   const {
     register,
@@ -108,14 +108,12 @@ export function CreateProjectModal({
     try {
       if (isEditing && project) {
         await updateProject(project.project_id, data)
-        toast({
-          title: 'Project updated',
+        success('Project updated', {
           description: 'Your project has been updated successfully.'
         })
       } else {
         await createProject(data)
-        toast({
-          title: 'Project created',
+        success('Project created', {
           description: 'Your new project has been created successfully.'
         })
       }
@@ -123,10 +121,8 @@ export function CreateProjectModal({
       onSuccess?.()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unexpected error occurred'
-      toast({
-        title: isEditing ? 'Failed to update project' : 'Failed to create project',
-        description: message,
-        variant: 'destructive'
+      showError(isEditing ? 'Failed to update project' : 'Failed to create project', {
+        description: message
       })
     } finally {
       setIsLoading(false)
@@ -140,8 +136,7 @@ export function CreateProjectModal({
     setIsLoading(true)
     try {
       await deleteProject(project.project_id)
-      toast({
-        title: 'Project deleted',
+      success('Project deleted', {
         description: 'Your project has been deleted successfully.'
       })
       setShowDeleteConfirm(false)
@@ -149,10 +144,8 @@ export function CreateProjectModal({
       onSuccess?.()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unexpected error occurred'
-      toast({
-        title: 'Failed to delete project',
-        description: message,
-        variant: 'destructive'
+      showError('Failed to delete project', {
+        description: message
       })
     } finally {
       setIsLoading(false)
