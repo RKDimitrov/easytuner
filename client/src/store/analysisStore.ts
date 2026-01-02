@@ -10,6 +10,8 @@ export interface MapCandidate {
   size: number
   dimensions?: { x: number; y: number; z?: number }
   data?: number[]
+  dataType?: string  // e.g., 'u16le', 'u32be', 'float32le'
+  elementSize?: number  // bytes per element
 }
 
 export interface Bookmark {

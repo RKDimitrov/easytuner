@@ -497,30 +497,33 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
           const convertCandidate = (c: CandidateResponse) => {
             let dimensions: { x: number; y: number; z?: number } | undefined
             
-            // Extract dimensions from features (CandidateResponse uses features, not dimensions)
-            const dims: any = {}
+            // Get dimensions directly from candidate.dimensions (not from empty dims object)
+            const dims = c.dimensions || {}
             const features = c.features || {}
             
-            // Determine type first to handle dimensions correctly
+            // Determine type from pattern_type field (which comes from Candidate.type: '1D', '2D', '3D', 'scalar')
             let type: '1D' | '2D' | '3D' = '2D'
             if (c.pattern_type) {
-              const patternLower = c.pattern_type.toLowerCase()
-              if (patternLower.includes('1d') || patternLower === '1d_array') {
+              const patternUpper = c.pattern_type.toUpperCase()
+              if (patternUpper === '1D' || patternUpper.includes('1D')) {
                 type = '1D'
-              } else if (patternLower.includes('3d') || patternLower === '3d_table') {
+              } else if (patternUpper === '3D' || patternUpper.includes('3D')) {
                 type = '3D'
-              } else if (patternLower.includes('2d') || patternLower === '2d_table') {
+              } else if (patternUpper === '2D' || patternUpper.includes('2D')) {
+                type = '2D'
+              } else {
+                // Default to 2D if unknown
                 type = '2D'
               }
             }
             
             // Try to get dimensions from the dimensions field first
-            if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
+            if (dims.x !== undefined || dims.width !== undefined || dims.rows !== undefined || dims.estimated_elements !== undefined) {
               // If we have estimated_elements, try to infer dimensions
-              if (dims.estimated_elements && !dims.x && !dims.width) {
-                // For 1D arrays, don't set dimensions (MapCandidate requires y for dimensions)
+              if (dims.estimated_elements !== undefined && dims.x === undefined && dims.width === undefined) {
+                // For 1D arrays, use x dimension
                 if (type === '1D') {
-                  dimensions = undefined
+                  dimensions = { x: dims.estimated_elements, y: 1 }
                 } else if (type === '2D') {
                   // For 2D, try to infer square dimensions
                   const sqrt = Math.sqrt(dims.estimated_elements)
@@ -540,41 +543,73 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
                   }
                 }
               } else {
-                // We have explicit dimensions
+                // We have explicit dimensions - prefer x, y, z format, fallback to width/height
                 if (type === '1D') {
-                  // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
-                  dimensions = undefined
+                  // For 1D, use x dimension
+                  if (dims.x !== undefined) {
+                    dimensions = { x: dims.x, y: 1 }
+                  } else if (dims.width !== undefined) {
+                    dimensions = { x: dims.width, y: 1 }
+                  } else {
+                    dimensions = undefined
+                  }
                 } else if (type === '2D') {
-                  dimensions = {
-                    x: dims.x || dims.width || dims.rows || 0,
-                    y: dims.y || dims.height || dims.cols || 0
+                  // For 2D, use x and y
+                  const x = dims.x !== undefined ? dims.x : (dims.width !== undefined ? dims.width : (dims.rows !== undefined ? dims.rows : 0))
+                  const y = dims.y !== undefined ? dims.y : (dims.height !== undefined ? dims.height : (dims.cols !== undefined ? dims.cols : 0))
+                  if (x > 0 && y > 0) {
+                    dimensions = { x, y }
                   }
                 } else if (type === '3D') {
-                  dimensions = {
-                    x: dims.x || dims.width || dims.rows || 0,
-                    y: dims.y || dims.height || dims.cols || 0,
-                    z: dims.z || dims.depth
+                  // For 3D, use x, y, z
+                  const x = dims.x !== undefined ? dims.x : (dims.width !== undefined ? dims.width : (dims.rows !== undefined ? dims.rows : 0))
+                  const y = dims.y !== undefined ? dims.y : (dims.height !== undefined ? dims.height : (dims.cols !== undefined ? dims.cols : 0))
+                  const z = dims.z !== undefined ? dims.z : (dims.depth !== undefined ? dims.depth : 1)
+                  if (x > 0 && y > 0 && z > 0) {
+                    dimensions = { x, y, z }
                   }
                 }
               }
-            } else if (features.x_size || features.width) {
+            } else if (features.x_size !== undefined || features.width !== undefined) {
               // Fallback to features if dimensions not available
               if (type === '1D') {
-                // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
-                dimensions = undefined
+                // For 1D, use x dimension
+                const x = features.x_size || features.width || 0
+                if (x > 0) {
+                  dimensions = { x, y: 1 }
+                }
               } else if (type === '2D') {
-                dimensions = {
-                  x: features.x_size || features.width || 0,
-                  y: features.y_size || features.height || 0
+                const x = features.x_size || features.width || 0
+                const y = features.y_size || features.height || 0
+                if (x > 0 && y > 0) {
+                  dimensions = { x, y }
                 }
               } else {
-                dimensions = {
-                  x: features.x_size || features.width || 0,
-                  y: features.y_size || features.height || 0,
-                  z: features.z_size || features.depth
+                const x = features.x_size || features.width || 0
+                const y = features.y_size || features.height || 0
+                const z = features.z_size || features.depth || 1
+                if (x > 0 && y > 0 && z > 0) {
+                  dimensions = { x, y, z }
                 }
               }
             }
+            
+            // Final fallback: if dimensions still not set but we have width/height in dims, use them
+            if (!dimensions && (dims.width !== undefined || dims.height !== undefined)) {
+              const x = dims.width || dims.x || 1
+              const y = dims.height || dims.y || 1
+              if (x > 0 && y > 0) {
+                dimensions = { x, y }
+                // Update type based on dimensions if not already set correctly
+                if (type === '1D' && y > 1) {
+                  type = '2D'
+                }
+              }
+            }
+            
+            // Extract data type and element size from dimensions or features
+            const elementSize = dims.element_size || 2 // Default to 2 bytes (uint16)
+            const dataType = c.data_type || 'u16le' // Default to uint16 little endian
             
             return {
               id: c.candidate_id,
@@ -582,7 +617,9 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
               offset: c.offset,
               confidence: Math.round(c.confidence * 100), // Convert to percentage
               size: c.size,
-              dimensions
+              dimensions,
+              dataType,
+              elementSize,
             }
           }
           

@@ -285,6 +285,21 @@ export function Analysis() {
       }
     }
     
+    // Extract data type and element size from dimensions or candidate
+    const elementSize = dims.element_size || 2 // Default to 2 bytes (uint16)
+    const dataType = candidate.data_type || 'u16le' // Default to uint16 little endian
+    
+    // Debug: Log if dimensions are missing (only in development)
+    if (process.env.NODE_ENV === 'development' && !dimensions && candidate.size > 0) {
+      console.debug('Candidate missing dimensions:', {
+        id: candidate.candidate_id,
+        dims,
+        features: Object.keys(features),
+        type,
+        size: candidate.size
+      })
+    }
+    
     return {
       id: candidate.candidate_id,
       type,
@@ -292,6 +307,8 @@ export function Analysis() {
       confidence: Math.round(candidate.confidence * 100), // Convert to percentage
       size: candidate.size,
       dimensions,
+      dataType,
+      elementSize,
     }
   }
 
@@ -316,7 +333,28 @@ export function Analysis() {
   const loadScanResults = async (id: string) => {
     try {
       const results = await getScanResults(id)
+      
+      // Debug: Log raw API response to check dimensions
+      if (process.env.NODE_ENV === 'development' && results.candidates.length > 0) {
+        console.debug('Scan results loaded:', {
+          total: results.total_candidates,
+          first_candidate: {
+            id: results.candidates[0].candidate_id,
+            dimensions: results.candidates[0].dimensions,
+            has_dimensions: !!results.candidates[0].dimensions && Object.keys(results.candidates[0].dimensions).length > 0,
+            pattern_type: results.candidates[0].pattern_type
+          }
+        })
+      }
+      
       const convertedCandidates = results.candidates.map(convertCandidate)
+      
+      // Debug: Check if any candidates are missing dimensions after conversion
+      const missingDims = convertedCandidates.filter(c => !c.dimensions)
+      if (missingDims.length > 0) {
+        console.warn(`${missingDims.length} candidates missing dimensions after conversion`, missingDims.map(c => ({ id: c.id, type: c.type, size: c.size })))
+      }
+      
       setCandidates(convertedCandidates)
       setScanComplete(true)
       if (results.candidates.length > 0) {
