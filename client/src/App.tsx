@@ -18,7 +18,7 @@ import { AlertCircle } from 'lucide-react'
 
 function App() {
   const navigate = useNavigate()
-  const { sessionExpired, logout } = useAuthStore()
+  const { sessionExpired, logout, isAuthenticated } = useAuthStore()
 
   // Setup axios interceptor for automatic token handling
   useEffect(() => {
@@ -26,6 +26,17 @@ function App() {
     // Initialize settings (theme, etc.)
     initializeSettings()
   }, [])
+
+  // Redirect to login when session expires
+  useEffect(() => {
+    if (sessionExpired && !isAuthenticated) {
+      // Small delay to allow state to update
+      const timer = setTimeout(() => {
+        navigate('/login', { replace: true })
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [sessionExpired, isAuthenticated, navigate])
 
   const handleSessionExpiredLogin = async () => {
     await logout()

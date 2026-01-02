@@ -122,9 +122,10 @@ export const useAuthStore = create<AuthState>()(
           } catch (error) {
             console.error('Logout error:', error)
             // Continue with local logout even if API call fails
+          } finally {
+            // Always clear local state
+            set(initialState)
           }
-          
-          set(initialState)
         },
 
         /**
@@ -238,13 +239,37 @@ export const useAuthStore = create<AuthState>()(
  * Setup axios interceptor to automatically add auth token to requests
  * and handle token refresh on 401 errors
  */
+let isRefreshing = false
+let refreshPromise: Promise<void> | null = null
+const failedQueue: Array<{
+  resolve: (value?: any) => void
+  reject: (error?: any) => void
+}> = []
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue.length = 0
+}
+
 export function setupAuthInterceptor() {
   // Dynamic import to avoid ESM/require issues
   import('axios').then(({ default: axios }) => {
     // Request interceptor: Add auth token to all requests
     axios.interceptors.request.use(
       (config) => {
-        const { accessToken } = useAuthStore.getState()
+        const { accessToken, sessionExpired } = useAuthStore.getState()
+        
+        // Don't add token if session is expired
+        if (sessionExpired) {
+          return Promise.reject(new Error('Session expired'))
+        }
+        
         if (accessToken && !config.headers.Authorization) {
           config.headers.Authorization = `Bearer ${accessToken}`
         }
@@ -261,17 +286,60 @@ export function setupAuthInterceptor() {
 
         // If 401 and we haven't tried to refresh yet
         if (error.response?.status === 401 && !originalRequest._retry) {
+          // If already refreshing, queue this request
+          if (isRefreshing) {
+            return new Promise((resolve, reject) => {
+              failedQueue.push({ resolve, reject })
+            })
+              .then((token) => {
+                originalRequest.headers.Authorization = `Bearer ${token}`
+                return axios(originalRequest)
+              })
+              .catch((err) => {
+                return Promise.reject(err)
+              })
+          }
+
           originalRequest._retry = true
+          isRefreshing = true
+
+          // Create refresh promise
+          refreshPromise = useAuthStore
+            .getState()
+            .refreshTokens()
+            .then(() => {
+              const { accessToken } = useAuthStore.getState()
+              processQueue(null, accessToken)
+              return accessToken
+            })
+            .catch((refreshError) => {
+              // Refresh failed - immediately logout and redirect
+              const authStore = useAuthStore.getState()
+              authStore.handleSessionExpired()
+              
+              // Process queue with error
+              processQueue(refreshError, null)
+              
+              // Redirect to login after a short delay to allow state update
+              setTimeout(() => {
+                window.location.href = '/login'
+              }, 100)
+              
+              return Promise.reject(refreshError)
+            })
+            .finally(() => {
+              isRefreshing = false
+              refreshPromise = null
+            })
 
           try {
-            await useAuthStore.getState().refreshTokens()
+            const token = await refreshPromise
             
             // Retry original request with new token
-            const { accessToken } = useAuthStore.getState()
-            originalRequest.headers.Authorization = `Bearer ${accessToken}`
+            originalRequest.headers.Authorization = `Bearer ${token}`
             return axios(originalRequest)
           } catch (refreshError) {
-            // Refresh failed, auth store will mark session as expired
+            // Already handled in refreshPromise catch
             return Promise.reject(refreshError)
           }
         }

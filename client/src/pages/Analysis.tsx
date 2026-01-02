@@ -77,6 +77,59 @@ export function Analysis() {
   const [checksumValidation, setChecksumValidation] = useState<ChecksumValidationResponse | null>(null)
   const [isValidatingChecksum, setIsValidatingChecksum] = useState(false)
 
+  // Block navigation during scan using beforeunload and history blocking
+  useEffect(() => {
+    if (!isScanning) return
+
+    // Block browser navigation/refresh
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = 'A scan is in progress. Are you sure you want to leave?'
+      return e.returnValue
+    }
+
+    // Block browser back/forward navigation
+    const handlePopState = (e: PopStateEvent) => {
+      if (isScanning) {
+        const shouldProceed = window.confirm(
+          'A scan is currently in progress. Navigating away will cancel the scan. Do you want to continue?'
+        )
+        if (!shouldProceed) {
+          // Push current state back to prevent navigation
+          window.history.pushState(null, '', window.location.href)
+        } else {
+          setIsScanning(false)
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('popstate', handlePopState)
+    
+    // Push a state to enable popstate detection
+    window.history.pushState(null, '', window.location.href)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [isScanning])
+
+  // Create a wrapped navigate function that checks for scanning
+  const navigateWithCheck = (path: string, options?: { replace?: boolean }) => {
+    if (isScanning) {
+      const shouldProceed = window.confirm(
+        'A scan is currently in progress. Navigating away will cancel the scan. Do you want to continue?'
+      )
+      if (shouldProceed) {
+        setIsScanning(false)
+        navigate(path, options)
+      }
+    } else {
+      navigate(path, options)
+    }
+  }
+
   // Redirect if no file loaded (check both fileData and fileId)
   // Don't redirect if fileId exists - HexViewer will load it
   useEffect(() => {
@@ -92,27 +145,30 @@ export function Analysis() {
   const convertCandidate = (candidate: CandidateResponse): MapCandidate => {
     let dimensions: { x: number; y: number; z?: number } | undefined
     
-    // Extract dimensions from features (CandidateResponse uses features, not dimensions)
-    const dims: any = {}
+    // Get dimensions directly from candidate.dimensions (not from empty dims object)
+    const dims = candidate.dimensions || {}
     const features = candidate.features || {}
     
-    // Determine type first to handle dimensions correctly
+    // Determine type from pattern_type field (which comes from Candidate.type: '1D', '2D', '3D', 'scalar')
     let type: '1D' | '2D' | '3D' = '2D'
     if (candidate.pattern_type) {
-      const patternLower = candidate.pattern_type.toLowerCase()
-      if (patternLower.includes('1d') || patternLower === '1d_array') {
+      const patternUpper = candidate.pattern_type.toUpperCase()
+      if (patternUpper === '1D' || patternUpper.includes('1D')) {
         type = '1D'
-      } else if (patternLower.includes('3d') || patternLower === '3d_table') {
+      } else if (patternUpper === '3D' || patternUpper.includes('3D')) {
         type = '3D'
-      } else if (patternLower.includes('2d') || patternLower === '2d_table') {
+      } else if (patternUpper === '2D' || patternUpper.includes('2D')) {
+        type = '2D'
+      } else {
+        // Default to 2D if unknown
         type = '2D'
       }
     }
     
     // Try to get dimensions from the dimensions field first
-    if (dims.x || dims.width || dims.rows || dims.estimated_elements) {
+    if (dims.x !== undefined || dims.width !== undefined || dims.rows !== undefined || dims.estimated_elements !== undefined) {
       // If we have estimated_elements, try to infer dimensions
-      if (dims.estimated_elements && !dims.x && !dims.width) {
+      if (dims.estimated_elements !== undefined && dims.x === undefined && dims.width === undefined) {
         // For 1D arrays, don't set dimensions (MapCandidate requires y for dimensions)
         if (type === '1D') {
           dimensions = undefined
@@ -135,42 +191,99 @@ export function Analysis() {
           }
         }
       } else {
-        // We have explicit dimensions
+        // We have explicit dimensions - prefer x, y, z format, fallback to width/height
         if (type === '1D') {
-          // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
-          dimensions = undefined
+          // For 1D, use x dimension only (y will be 1 or undefined)
+          if (dims.x !== undefined) {
+            dimensions = { x: dims.x, y: 1 }
+          } else if (dims.width !== undefined) {
+            dimensions = { x: dims.width, y: 1 }
+          } else {
+            dimensions = undefined
+          }
         } else if (type === '2D') {
-          dimensions = {
-            x: dims.x || dims.width || dims.rows || 0,
-            y: dims.y || dims.height || dims.cols || 0
+          // For 2D, use x and y
+          const x = dims.x !== undefined ? dims.x : (dims.width !== undefined ? dims.width : (dims.rows !== undefined ? dims.rows : 0))
+          const y = dims.y !== undefined ? dims.y : (dims.height !== undefined ? dims.height : (dims.cols !== undefined ? dims.cols : 0))
+          if (x > 0 && y > 0) {
+            dimensions = { x, y }
           }
         } else if (type === '3D') {
-          dimensions = {
-            x: dims.x || dims.width || dims.rows || 0,
-            y: dims.y || dims.height || dims.cols || 0,
-            z: dims.z || dims.depth
+          // For 3D, use x, y, z
+          const x = dims.x !== undefined ? dims.x : (dims.width !== undefined ? dims.width : (dims.rows !== undefined ? dims.rows : 0))
+          const y = dims.y !== undefined ? dims.y : (dims.height !== undefined ? dims.height : (dims.cols !== undefined ? dims.cols : 0))
+          const z = dims.z !== undefined ? dims.z : (dims.depth !== undefined ? dims.depth : 1)
+          if (x > 0 && y > 0 && z > 0) {
+            dimensions = { x, y, z }
           }
         }
       }
-    } else if (features.x_size || features.width) {
+    } else if (features.x_size !== undefined || features.width !== undefined) {
       // Fallback to features if dimensions not available
       if (type === '1D') {
-        // For 1D, don't set dimensions (MapCandidate requires y for dimensions)
-        dimensions = undefined
+        // For 1D, use x dimension
+        const x = features.x_size || features.width || 0
+        if (x > 0) {
+          dimensions = { x, y: 1 }
+        }
       } else if (type === '2D') {
-        dimensions = {
-          x: features.x_size || features.width || 0,
-          y: features.y_size || features.height || 0
+        const x = features.x_size || features.width || 0
+        const y = features.y_size || features.height || 0
+        if (x > 0 && y > 0) {
+          dimensions = { x, y }
         }
       } else {
-        dimensions = {
-          x: features.x_size || features.width || 0,
-          y: features.y_size || features.height || 0,
-          z: features.z_size || features.depth
+        const x = features.x_size || features.width || 0
+        const y = features.y_size || features.height || 0
+        const z = features.z_size || features.depth || 1
+        if (x > 0 && y > 0 && z > 0) {
+          dimensions = { x, y, z }
         }
       }
     }
     
+    // Final fallback: if dimensions still not set but we have width/height in dims, use them
+    if (!dimensions && (dims.width !== undefined || dims.height !== undefined)) {
+      const x = dims.width || dims.x || 1
+      const y = dims.height || dims.y || 1
+      if (x > 0 && y > 0) {
+        dimensions = { x, y }
+        // Update type based on dimensions if not already set correctly
+        if (type === '1D' && y > 1) {
+          type = '2D'
+        }
+      }
+    }
+    
+    // If still no dimensions but we have size, try to infer from size and type
+    if (!dimensions && candidate.size > 0) {
+      // Try to infer dimensions from size
+      const elementSize = dims.element_size || 2 // Default to 2 bytes (uint16)
+      const numElements = Math.floor(candidate.size / elementSize)
+      
+      if (type === '2D' && numElements > 0) {
+        // Try to find a reasonable 2D layout
+        const sqrt = Math.floor(Math.sqrt(numElements))
+        if (sqrt * sqrt === numElements) {
+          dimensions = { x: sqrt, y: sqrt }
+        } else {
+          // Try common aspect ratios
+          for (const ratio of [16, 8, 4, 2]) {
+            if (numElements % ratio === 0) {
+              dimensions = { x: numElements / ratio, y: ratio }
+              break
+            }
+          }
+          // If no good ratio found, use square-ish
+          if (!dimensions) {
+            const x = Math.floor(Math.sqrt(numElements))
+            dimensions = { x, y: Math.ceil(numElements / x) }
+          }
+        }
+      } else if (type === '1D' && numElements > 0) {
+        dimensions = { x: numElements, y: 1 }
+      }
+    }
     
     return {
       id: candidate.candidate_id,
@@ -391,7 +504,34 @@ export function Analysis() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Loading Overlay - Blocks all interaction during scan */}
+      {isScanning && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-card border border-border rounded-lg shadow-xl p-8 max-w-md w-full mx-4 text-center">
+            <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
+            <h2 className="text-xl font-semibold mb-2">Scanning Firmware</h2>
+            <p className="text-muted-foreground mb-4">
+              Analyzing the firmware file for ECU maps. This may take a moment...
+            </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Progress</span>
+                <span className="font-mono text-primary">
+                  {typeof scanProgress === 'number' && !isNaN(scanProgress) 
+                    ? Math.round(scanProgress) 
+                    : 0}%
+                </span>
+              </div>
+              <Progress value={scanProgress} className="h-2" />
+            </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              Please wait while the scan completes. Navigation is disabled during this process.
+            </p>
+          </div>
+        </div>
+      )}
+      
       <Header />
       
       {/* Page Header */}
@@ -402,7 +542,8 @@ export function Analysis() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate('/projects')}
+                onClick={() => navigateWithCheck('/projects')}
+                disabled={isScanning}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Projects
@@ -422,7 +563,7 @@ export function Analysis() {
               <Button
                 variant="outline"
                 onClick={() => setShowChecksumDialog(true)}
-                disabled={isSaving || !fileId}
+                disabled={isSaving || !fileId || isScanning}
               >
                 <Shield className="w-4 h-4 mr-2" />
                 Configure Checksum
@@ -432,7 +573,7 @@ export function Analysis() {
                 <Button
                   variant="default"
                   onClick={handleSaveEdits}
-                  disabled={isSaving || !fileId}
+                  disabled={isSaving || !fileId || isScanning}
                 >
                   {isSaving ? (
                     <>
@@ -452,7 +593,7 @@ export function Analysis() {
               <Button
                 variant="outline"
                 onClick={handleExportClick}
-                disabled={!fileId}
+                disabled={!fileId || isScanning}
               >
                 <Download className="w-4 h-4 mr-2" />
                 Export
