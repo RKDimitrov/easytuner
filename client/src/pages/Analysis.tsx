@@ -20,6 +20,7 @@ import { createScan, getScanResults, type CandidateResponse } from '../services/
 import { applyEdits, type EditOperation, type ChecksumConfig } from '../services/editService'
 import { downloadFile } from '../services/fileService'
 import { validateChecksum, type ChecksumValidationResponse } from '../services/checksumService'
+import { useIsMobile } from '../hooks/use-mobile'
 import { 
   FileCode, 
   Play, 
@@ -35,6 +36,7 @@ import {
 
 export function Analysis() {
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const {
     fileData,
     fileName,
@@ -575,54 +577,71 @@ export function Analysis() {
       {/* Page Header */}
       <div className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigateWithCheck('/projects')}
-                disabled={isScanning}
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Projects
-              </Button>
-              <div className="flex items-center gap-3">
-                <FileCode className="w-6 h-6 text-primary" />
-                <div>
-                  <h1 className="text-lg font-semibold">{fileName}</h1>
-                  <p className="text-sm text-muted-foreground">
-                    {formatBytes(fileSize)}
-                  </p>
+          <div className="flex flex-col gap-4">
+            {/* Top row: Back button and file info */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigateWithCheck('/projects')}
+                  disabled={isScanning}
+                  className="shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">Back to Projects</span>
+                  <span className="md:hidden">Back</span>
+                </Button>
+                <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                  <FileCode className="w-5 h-5 md:w-6 md:h-6 text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <h1 className="text-base md:text-lg font-semibold truncate">{fileName}</h1>
+                    <p className="text-xs md:text-sm text-muted-foreground">
+                      {formatBytes(fileSize)}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
+            {/* Bottom row: Action buttons - wrap on mobile */}
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
               <Button
                 variant="outline"
+                size={isMobile ? "sm" : "default"}
                 onClick={() => setShowChecksumDialog(true)}
                 disabled={isSaving || !fileId || isScanning}
+                className="flex-1 md:flex-initial"
               >
-                <Shield className="w-4 h-4 mr-2" />
-                Configure Checksum
+                <Shield className="w-4 h-4 md:mr-2" />
+                <span className="hidden md:inline">Configure Checksum</span>
+                <span className="md:hidden">Checksum</span>
               </Button>
               
               {isDirty && editCount > 0 && (
                 <Button
                   variant="default"
+                  size={isMobile ? "sm" : "default"}
                   onClick={handleSaveEdits}
                   disabled={isSaving || !fileId || isScanning}
+                  className="flex-1 md:flex-initial"
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
+                      <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
+                      <span className="hidden md:inline">Saving...</span>
+                      <span className="md:hidden">Saving</span>
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Save Edits ({editCount})
-                      {checksumConfig && ' + Checksum'}
+                      <Save className="w-4 h-4 md:mr-2" />
+                      <span className="hidden md:inline">
+                        Save Edits ({editCount})
+                        {checksumConfig && ' + Checksum'}
+                      </span>
+                      <span className="md:hidden">
+                        Save ({editCount})
+                      </span>
                     </>
                   )}
                 </Button>
@@ -630,32 +649,40 @@ export function Analysis() {
               
               <Button
                 variant="outline"
+                size={isMobile ? "sm" : "default"}
                 onClick={handleExportClick}
                 disabled={!fileId || isScanning}
+                className="flex-1 md:flex-initial"
               >
-                <Download className="w-4 h-4 mr-2" />
-                Export
+                <Download className="w-4 h-4 md:mr-2" />
+                <span className="hidden md:inline">Export</span>
+                <span className="md:hidden">Export</span>
               </Button>
               
               <Button
+                size={isMobile ? "sm" : "default"}
                 onClick={startScan}
                 disabled={isScanning || !fileId}
                 variant={scanComplete ? 'secondary' : 'default'}
+                className="flex-1 md:flex-initial"
               >
                 {isScanning ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Scanning...
+                    <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
+                    <span className="hidden md:inline">Scanning...</span>
+                    <span className="md:hidden">Scanning</span>
                   </>
                 ) : scanComplete ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Rescan
+                    <CheckCircle2 className="w-4 h-4 md:mr-2" />
+                    <span className="hidden md:inline">Rescan</span>
+                    <span className="md:hidden">Rescan</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Start Scan
+                    <Play className="w-4 h-4 md:mr-2" />
+                    <span className="hidden md:inline">Start Scan</span>
+                    <span className="md:hidden">Scan</span>
                   </>
                 )}
               </Button>
@@ -682,7 +709,7 @@ export function Analysis() {
       {/* Main content */}
       <div className="container mx-auto px-4 py-6 space-y-4">
         {!scanComplete && candidates.length === 0 ? (
-          <Card className="h-[calc(100vh-200px)] flex items-center justify-center">
+          <Card className="min-h-[calc(100vh-280px)] md:h-[calc(100vh-200px)] flex items-center justify-center">
             <CardContent className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
                 <Play className="w-8 h-8 text-primary" />
@@ -696,35 +723,39 @@ export function Analysis() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Results Table */}
-            <ResultsTable />
+            <div className="min-h-[400px] lg:h-[calc(100vh-200px)]">
+              <ResultsTable />
+            </div>
             
             {/* Viewer Panel with Tabs */}
-            <Card className="h-full flex flex-col">
+            <Card className="min-h-[400px] lg:h-[calc(100vh-200px)] flex flex-col">
               <CardContent className="flex-1 overflow-hidden p-0">
                 <Tabs 
                   value={viewMode} 
                   onValueChange={(value) => setViewMode(value as 'hex' | '3d')}
                   className="h-full flex flex-col"
                 >
-                  <div className="border-b border-border px-4 pt-4">
+                  <div className="border-b border-border px-2 md:px-4 pt-4">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger 
                         value="hex" 
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-1 md:gap-2 text-xs md:text-sm"
                       >
-                        <Code2 className="w-4 h-4" />
-                        Hex Viewer
+                        <Code2 className="w-4 h-4 shrink-0" />
+                        <span className="hidden sm:inline">Hex Viewer</span>
+                        <span className="sm:hidden">Hex</span>
                       </TabsTrigger>
                       <TabsTrigger 
                         value="3d" 
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-1 md:gap-2 text-xs md:text-sm"
                       >
-                        <Box className="w-4 h-4" />
-                        3D Visualization
+                        <Box className="w-4 h-4 shrink-0" />
+                        <span className="hidden sm:inline">3D Visualization</span>
+                        <span className="sm:hidden">3D</span>
                         {!selectedCandidate && (
-                          <span className="ml-1 text-xs text-muted-foreground">
+                          <span className="hidden md:inline ml-1 text-xs text-muted-foreground">
                             (Select a map)
                           </span>
                         )}
