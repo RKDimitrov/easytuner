@@ -226,6 +226,10 @@ class ChecksumService:
         # Calculate new checksum
         checksum_value = self.calculate_checksum(file_data, config)
         
+        # Mask checksum value to fit in checksum_size bytes
+        max_value = (1 << (config.checksum_size * 8)) - 1
+        checksum_value = checksum_value & max_value
+        
         # Write checksum to file
         checksum_bytes = checksum_value.to_bytes(
             config.checksum_size,
@@ -269,6 +273,10 @@ class ChecksumService:
         
         # Calculate expected checksum
         calculated_checksum = self.calculate_checksum(file_data, config)
+        
+        # Mask calculated checksum to fit in checksum_size bytes for comparison
+        max_value = (1 << (config.checksum_size * 8)) - 1
+        calculated_checksum = calculated_checksum & max_value
         
         # Compare
         is_valid = stored_checksum == calculated_checksum
