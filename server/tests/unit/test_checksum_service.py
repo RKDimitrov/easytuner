@@ -212,7 +212,80 @@ class TestChecksumService:
         
         assert is_valid
         assert stored == calculated
-    
+
+    def test_ones_complement_checksum(self, service, sample_data):
+        """Test ones' complement checksum (0xFFFF - (sum & 0xFFFF)), common in Bosch EDC15/EDC16."""
+        config = ChecksumConfig(
+            algorithm=ChecksumAlgorithm.ONES_COMPLEMENT,
+            checksum_range=(0, 98),
+            checksum_location=98,
+            checksum_size=2,
+            endianness="little",
+        )
+        checksum = service.calculate_checksum(sample_data, config)
+        total = sum(range(98))
+        expected = (0xFFFF - (total & 0xFFFF)) & 0xFFFF
+        assert checksum == expected
+
+    def test_ones_complement_update_and_validate(self, service, sample_data):
+        """Test ones' complement checksum update and validation."""
+        file_data = bytearray(sample_data)
+        config = ChecksumConfig(
+            algorithm=ChecksumAlgorithm.ONES_COMPLEMENT,
+            checksum_range=(0, 98),
+            checksum_location=98,
+            checksum_size=2,
+            endianness="little",
+        )
+        service.update_checksum(file_data, config)
+        is_valid, stored, calculated = service.validate_checksum(bytes(file_data), config)
+        assert is_valid
+        assert stored == calculated
+
+    def test_modular_16bit_checksum(self, service, sample_data):
+        """Test 16-bit word sum then modulo (EDC15-style)."""
+        config = ChecksumConfig(
+            algorithm=ChecksumAlgorithm.MODULAR_16BIT,
+            checksum_range=(0, 98),
+            checksum_location=98,
+            checksum_size=2,
+            endianness="little",
+            modulo=0x10000,
+        )
+        checksum = service.calculate_checksum(sample_data, config)
+        assert 0 <= checksum <= 0xFFFF
+
+    def test_modular_16bit_update_and_validate(self, service, sample_data):
+        """Test modular 16-bit update and validation."""
+        file_data = bytearray(sample_data)
+        config = ChecksumConfig(
+            algorithm=ChecksumAlgorithm.MODULAR_16BIT,
+            checksum_range=(0, 98),
+            checksum_location=98,
+            checksum_size=2,
+            endianness="little",
+            modulo=0x10000,
+        )
+        service.update_checksum(file_data, config)
+        is_valid, stored, calculated = service.validate_checksum(bytes(file_data), config)
+        assert is_valid
+        assert stored == calculated
+
+    def test_ones_complement_16bit_update_and_validate(self, service, sample_data):
+        """Test ones' complement 16-bit word sum update and validation."""
+        file_data = bytearray(sample_data)
+        config = ChecksumConfig(
+            algorithm=ChecksumAlgorithm.ONES_COMPLEMENT_16BIT,
+            checksum_range=(0, 98),
+            checksum_location=98,
+            checksum_size=2,
+            endianness="little",
+        )
+        service.update_checksum(file_data, config)
+        is_valid, stored, calculated = service.validate_checksum(bytes(file_data), config)
+        assert is_valid
+        assert stored == calculated
+
     def test_crc16_checksum(self, service, sample_data):
         """Test CRC-16 checksum calculation."""
         config = ChecksumConfig(

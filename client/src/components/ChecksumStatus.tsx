@@ -1,23 +1,26 @@
 import { useState, useEffect } from 'react'
 import { useAnalysisStore } from '../store/analysisStore'
-import { validateChecksum, type ChecksumConfig, type ChecksumValidationResponse } from '../services/checksumService'
+import { validateChecksum, updateChecksum, type ChecksumConfig, type ChecksumValidationResponse } from '../services/checksumService'
 import { Button } from './ui/button'
 import { Alert, AlertDescription, AlertTitle } from './ui/alert'
 import { Badge } from './ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
-import { Loader2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, Wrench } from 'lucide-react'
 import { toast } from '../hooks/use-toast'
 import { formatHexOffset } from '../lib/utils'
 
 interface ChecksumStatusProps {
   config: ChecksumConfig | null
   onConfigChange?: () => void
+  /** Called after checksum is fixed so parent can refetch file data */
+  onFixSuccess?: () => Promise<void>
 }
 
-export function ChecksumStatus({ config }: ChecksumStatusProps) {
+export function ChecksumStatus({ config, onFixSuccess }: ChecksumStatusProps) {
   const fileId = useAnalysisStore((state) => state.fileId)
   const [validation, setValidation] = useState<ChecksumValidationResponse | null>(null)
   const [isValidating, setIsValidating] = useState(false)
+  const [isFixing, setIsFixing] = useState(false)
   const [lastValidated, setLastValidated] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -37,7 +40,7 @@ export function ChecksumStatus({ config }: ChecksumStatusProps) {
       const result = await validateChecksum(fileId, config)
       setValidation(result)
       setLastValidated(new Date())
-      
+
       if (result.is_valid) {
         toast.success('Checksum valid', {
           description: `Stored: ${result.stored_checksum_hex}, Calculated: ${result.calculated_checksum_hex}`
@@ -55,6 +58,26 @@ export function ChecksumStatus({ config }: ChecksumStatusProps) {
       setValidation(null)
     } finally {
       setIsValidating(false)
+    }
+  }
+
+  const handleFixChecksum = async () => {
+    if (!config || !fileId) return
+    setIsFixing(true)
+    try {
+      await updateChecksum(fileId, config)
+      await onFixSuccess?.()
+      toast.success('Checksum updated', {
+        description: `Correct value written at ${formatHexOffset(config.checksum_location)}`
+      })
+      await validateChecksumNow()
+    } catch (error) {
+      console.error('Failed to fix checksum:', error)
+      toast.error('Fix failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setIsFixing(false)
     }
   }
 
@@ -125,12 +148,40 @@ export function ChecksumStatus({ config }: ChecksumStatusProps) {
                       <span className="text-muted-foreground">Calculated:</span>{' '}
                       {validation.calculated_checksum_hex} ({validation.calculated_checksum})
                     </div>
+                    {!validation.is_valid && (
+                      <div className="pt-1 border-t border-border/50 mt-1">
+                        <span className="text-muted-foreground">Fix: </span>
+                        Change bytes at <span className="font-semibold">{formatHexOffset(validation.checksum_location)}</span> to{' '}
+                        <span className="font-semibold">{validation.calculated_checksum_hex}</span>.
+                      </div>
+                    )}
                   </div>
                   {!validation.is_valid && (
                     <p className="text-xs mt-1.5">
-                      The stored checksum does not match the calculated value. 
-                      This may indicate file corruption or that the checksum needs to be updated.
+                      The stored checksum does not match the calculated value.
+                      Use &quot;Fix checksum&quot; to write the correct value to the file.
                     </p>
+                  )}
+                  {!validation.is_valid && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={handleFixChecksum}
+                      disabled={isFixing}
+                    >
+                      {isFixing ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Fixing...
+                        </>
+                      ) : (
+                        <>
+                          <Wrench className="w-3 h-3 mr-1" />
+                          Fix checksum
+                        </>
+                      )}
+                    </Button>
                   )}
                   {lastValidated && (
                     <p className="text-xs text-muted-foreground mt-1">

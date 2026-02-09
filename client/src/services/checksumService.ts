@@ -40,7 +40,7 @@ export interface ExcludeRange {
 }
 
 export interface ChecksumConfig {
-  algorithm: 'simple_sum' | 'crc16' | 'crc32' | 'xor' | 'twos_complement' | 'modular'
+  algorithm: 'simple_sum' | 'crc16' | 'crc32' | 'xor' | 'twos_complement' | 'modular' | 'ones_complement' | 'modular_16bit' | 'ones_complement_16bit' | 'modular_16bit_be' | 'ones_complement_16bit_be'
   checksum_range: ChecksumRange
   checksum_location: number
   checksum_size?: number

@@ -23,6 +23,12 @@ class ChecksumAlgorithm(str, Enum):
     XOR = "xor"  # XOR of all bytes
     TWOS_COMPLEMENT = "twos_complement"  # Two's complement sum
     MODULAR = "modular"  # Sum modulo 0xFFFF or 0x10000
+    ONES_COMPLEMENT = "ones_complement"  # 0xFFFF - (sum & 0xFFFF), common in Bosch EDC15/EDC16
+    # 16-bit word sums (many Bosch EDC15/EDC16 use word sum, not byte sum)
+    MODULAR_16BIT = "modular_16bit"  # Sum 16-bit LE words, then modulo (0x10000 or 0xFFFF)
+    ONES_COMPLEMENT_16BIT = "ones_complement_16bit"  # 0xFFFF - (word_sum & 0xFFFF)
+    MODULAR_16BIT_BE = "modular_16bit_be"  # Sum 16-bit BIG-endian words, then modulo
+    ONES_COMPLEMENT_16BIT_BE = "ones_complement_16bit_be"  # 0xFFFF - (word_sum & 0xFFFF), BE words
 
 
 class ChecksumConfig:
@@ -96,22 +102,39 @@ class ChecksumService:
         
         return table
     
+    def _sum_16bit_words(self, data: bytearray, endianness: str) -> int:
+        """
+        Sum 16-bit words over data (little or big endian).
+        If length is odd, the last byte is treated as low byte of a word with high byte 0.
+        """
+        n = len(data)
+        if n == 0:
+            return 0
+        # Pad to even length so we can read words
+        if n % 2:
+            data = bytearray(data) + bytearray([0])
+        total = 0
+        for i in range(0, len(data), 2):
+            word = int.from_bytes(data[i : i + 2], byteorder=endianness, signed=False)
+            total += word
+        return total & 0xFFFFFFFF
+
     def _calculate_crc16(self, data: bytearray) -> int:
         """
         Calculate CRC-16-CCITT checksum.
-        
+
         Args:
             data: Data to checksum
-            
+
         Returns:
             CRC-16 value
         """
         crc = 0xFFFF  # Initial value
-        
+
         for byte in data:
             index = ((crc >> 8) ^ byte) & 0xFF
             crc = ((crc << 8) ^ self.crc16_table[index]) & 0xFFFF
-        
+
         return crc
     
     def _calculate_crc32(self, data: bytearray) -> int:
@@ -198,7 +221,33 @@ class ChecksumService:
             total = sum(data_to_checksum)
             modulo = config.modulo or 0xFFFF
             return total % modulo
-        
+
+        elif config.algorithm == ChecksumAlgorithm.ONES_COMPLEMENT:
+            # Ones' complement: stored value so that (sum of data + stored) & 0xFFFF == 0xFFFF
+            # stored = 0xFFFF - (sum & 0xFFFF); used in many Bosch EDC15/EDC16 ECUs
+            total = sum(data_to_checksum)
+            return (0xFFFF - (total & 0xFFFF)) & 0xFFFF
+
+        elif config.algorithm == ChecksumAlgorithm.MODULAR_16BIT:
+            # Sum 16-bit little-endian words in range, then modulo (0x10000 common for EDC15)
+            word_sum = self._sum_16bit_words(data_to_checksum, config.endianness)
+            modulo = config.modulo or 0x10000
+            return word_sum % modulo
+
+        elif config.algorithm == ChecksumAlgorithm.ONES_COMPLEMENT_16BIT:
+            # 0xFFFF - (word_sum & 0xFFFF); EDC15/EDC16 variant using word sum
+            word_sum = self._sum_16bit_words(data_to_checksum, config.endianness)
+            return (0xFFFF - (word_sum & 0xFFFF)) & 0xFFFF
+
+        elif config.algorithm == ChecksumAlgorithm.MODULAR_16BIT_BE:
+            word_sum = self._sum_16bit_words(data_to_checksum, "big")
+            modulo = config.modulo or 0x10000
+            return word_sum % modulo
+
+        elif config.algorithm == ChecksumAlgorithm.ONES_COMPLEMENT_16BIT_BE:
+            word_sum = self._sum_16bit_words(data_to_checksum, "big")
+            return (0xFFFF - (word_sum & 0xFFFF)) & 0xFFFF
+
         elif config.algorithm == ChecksumAlgorithm.CRC16:
             return self._calculate_crc16(data_to_checksum)
         

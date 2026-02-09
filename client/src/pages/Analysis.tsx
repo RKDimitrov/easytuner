@@ -13,6 +13,7 @@ import { HexViewer } from '../components/HexViewer'
 import { ResultsTable } from '../components/ResultsTable'
 import { Map3DViewer } from '../components/Map3DViewer'
 import { ChecksumConfigDialog } from '../components/ChecksumConfigDialog'
+import { ChecksumDetectPopup } from '../components/ChecksumDetectPopup'
 import { ChecksumStatus } from '../components/ChecksumStatus'
 import { ChecksumTester } from '../components/ChecksumTester'
 import { ExportDialog } from '../components/ExportDialog'
@@ -74,6 +75,7 @@ export function Analysis() {
   const [scanComplete, setScanComplete] = useState(false)
   const [viewMode, setViewMode] = useState<'hex' | '3d'>('hex')
   const [checksumConfig, setChecksumConfig] = useState<ChecksumConfig | null>(null)
+  const [showChecksumDetectPopup, setShowChecksumDetectPopup] = useState(false)
   const [showChecksumDialog, setShowChecksumDialog] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [checksumValidation, setChecksumValidation] = useState<ChecksumValidationResponse | null>(null)
@@ -805,7 +807,12 @@ export function Analysis() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             <ChecksumStatus
               config={checksumConfig}
-              onConfigChange={() => setShowChecksumDialog(true)}
+              onConfigChange={() => setShowChecksumDetectPopup(true)}
+              onFixSuccess={async () => {
+                if (!fileId || !fileName) return
+                const arrayBuffer = await downloadFile(fileId)
+                setFileData(new Uint8Array(arrayBuffer), fileName, fileId)
+              }}
             />
             <ChecksumTester
               fileSize={fileSize}
@@ -820,7 +827,25 @@ export function Analysis() {
         )}
       </div>
 
-      {/* Checksum Configuration Dialog */}
+      {/* Small checksum detect popup (opens first when clicking Configure Checksum) */}
+      <ChecksumDetectPopup
+        open={showChecksumDetectPopup}
+        onClose={() => setShowChecksumDetectPopup(false)}
+        fileId={fileId ?? undefined}
+        fileSize={fileSize}
+        onApplyConfig={(config) => {
+          setChecksumConfig(config)
+          toast.success('Checksum configuration applied', {
+            description: 'Configuration from detection applied. Checksum will be updated when you save edits.'
+          })
+        }}
+        onOpenFullConfig={() => {
+          setShowChecksumDetectPopup(false)
+          setShowChecksumDialog(true)
+        }}
+      />
+
+      {/* Full Checksum Configuration Dialog */}
       <ChecksumConfigDialog
         open={showChecksumDialog}
         onClose={() => setShowChecksumDialog(false)}
@@ -832,6 +857,7 @@ export function Analysis() {
           })
         }}
         fileSize={fileSize}
+        fileId={fileId ?? undefined}
         defaultConfig={checksumConfig || undefined}
       />
 

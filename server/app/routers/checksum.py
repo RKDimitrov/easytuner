@@ -34,6 +34,11 @@ def _convert_algorithm(algorithm: str) -> ChecksumAlgorithmEnum:
         "xor": ChecksumAlgorithmEnum.XOR,
         "twos_complement": ChecksumAlgorithmEnum.TWOS_COMPLEMENT,
         "modular": ChecksumAlgorithmEnum.MODULAR,
+        "ones_complement": ChecksumAlgorithmEnum.ONES_COMPLEMENT,
+        "modular_16bit": ChecksumAlgorithmEnum.MODULAR_16BIT,
+        "ones_complement_16bit": ChecksumAlgorithmEnum.ONES_COMPLEMENT_16BIT,
+        "modular_16bit_be": ChecksumAlgorithmEnum.MODULAR_16BIT_BE,
+        "ones_complement_16bit_be": ChecksumAlgorithmEnum.ONES_COMPLEMENT_16BIT_BE,
     }
     
     if algorithm not in algorithm_map:
