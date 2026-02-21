@@ -585,33 +585,6 @@ export function Analysis() {
 
   return (
     <div className="min-h-screen bg-background relative">
-      {/* Loading Overlay - Blocks all interaction during scan */}
-      {isScanning && (
-        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-card border border-border rounded-lg shadow-xl p-8 max-w-md w-full mx-4 text-center">
-            <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-            <h2 className="text-xl font-semibold mb-2">Scanning Firmware</h2>
-            <p className="text-muted-foreground mb-4">
-              Analyzing the firmware file for ECU maps. This may take a moment...
-            </p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Progress</span>
-                <span className="font-mono text-primary">
-                  {typeof scanProgress === 'number' && !isNaN(scanProgress) 
-                    ? Math.round(scanProgress) 
-                    : 0}%
-                </span>
-              </div>
-              <Progress value={scanProgress} className="h-2" />
-            </div>
-            <p className="text-xs text-muted-foreground mt-4">
-              Please wait while the scan completes. Navigation is disabled during this process.
-            </p>
-          </div>
-        </div>
-      )}
-      
       <Header />
       
       {/* Page Header */}
@@ -625,7 +598,6 @@ export function Analysis() {
                   variant="ghost"
                   size="sm"
                   onClick={() => navigateWithCheck('/projects')}
-                  disabled={isScanning}
                   className="shrink-0"
                 >
                   <ArrowLeft className="w-4 h-4 md:mr-2" />
@@ -650,7 +622,7 @@ export function Analysis() {
                 variant="outline"
                 size={isMobile ? "sm" : "default"}
                 onClick={() => setShowChecksumDialog(true)}
-                disabled={isSaving || !fileId || isScanning}
+                disabled={isSaving || !fileId}
                 className="flex-1 md:flex-initial"
               >
                 <Shield className="w-4 h-4 md:mr-2" />
@@ -663,7 +635,7 @@ export function Analysis() {
                   variant="default"
                   size={isMobile ? "sm" : "default"}
                   onClick={handleSaveEdits}
-                  disabled={isSaving || !fileId || isScanning}
+                  disabled={isSaving || !fileId}
                   className="flex-1 md:flex-initial"
                 >
                   {isSaving ? (
@@ -691,7 +663,7 @@ export function Analysis() {
                 variant="outline"
                 size={isMobile ? "sm" : "default"}
                 onClick={handleExportClick}
-                disabled={!fileId || isScanning}
+                disabled={!fileId}
                 className="flex-1 md:flex-initial"
               >
                 <Download className="w-4 h-4 md:mr-2" />
@@ -734,7 +706,7 @@ export function Analysis() {
                   setMapPropsTarget('new')
                   setShowMapPropsDialog(true)
                 }}
-                disabled={!fileId || isScanning}
+                disabled={!fileId}
                 className="flex-1 md:flex-initial"
               >
                 <Map className="w-4 h-4 md:mr-2" />
@@ -743,45 +715,57 @@ export function Analysis() {
               </Button>
             </div>
           </div>
-
-          {/* Progress bar */}
-          {isScanning && (
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Scan Progress</span>
-                <span className="font-mono text-primary">
-                  {typeof scanProgress === 'number' && !isNaN(scanProgress) 
-                    ? Math.round(scanProgress) 
-                    : 0}%
-                </span>
-              </div>
-              <Progress value={scanProgress} className="h-2" />
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Main content */}
+      {/* Main content: always two columns – left = status/results, right = viewer */}
       <div className="container mx-auto px-4 py-6 space-y-4">
-        {!scanComplete && candidates.length === 0 ? (
-          <Card className="min-h-[calc(100vh-280px)] md:h-[calc(100vh-200px)] flex items-center justify-center">
-            <CardContent className="text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
-                <Play className="w-8 h-8 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold mb-2">Ready to Scan</h2>
-                <p className="text-muted-foreground max-w-md">
-                  Click "Start Scan" to begin analyzing the firmware file for potential ECU maps and data structures.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left column: My Maps (above) + Analysis Results – viewer always on the right */}
-            <div className="flex flex-col gap-6 min-h-[400px] lg:h-[calc(100vh-200px)]">
-              {userMaps.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left column: Not scanned / Scan progress / My Maps + Analysis Results */}
+          <div className="flex flex-col gap-6 min-h-[400px] lg:h-[calc(100vh-200px)]">
+            {isScanning ? (
+              <Card className="shrink-0">
+                <CardContent className="pt-6 pb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin shrink-0" />
+                    <div>
+                      <h2 className="text-lg font-semibold">Scanning firmware</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Analyzing the file for ECU maps. You can keep editing on the right.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="font-mono text-primary">
+                        {typeof scanProgress === 'number' && !isNaN(scanProgress)
+                          ? Math.round(scanProgress)
+                          : 0}%
+                      </span>
+                    </div>
+                    <Progress value={scanProgress} className="h-2" />
+                  </div>
+                </CardContent>
+              </Card>
+            ) : !scanComplete && candidates.length === 0 ? (
+              <Card className="shrink-0">
+                <CardContent className="pt-6 pb-6 text-center">
+                  <div className="w-14 h-14 mx-auto rounded-full bg-muted flex items-center justify-center mb-4">
+                    <Play className="w-7 h-7 text-muted-foreground" />
+                  </div>
+                  <h2 className="text-lg font-semibold mb-2">File not yet scanned</h2>
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
+                    Scan this file to discover ECU maps and add them to the analysis results below.
+                  </p>
+                  <Button onClick={startScan} disabled={!fileId}>
+                    <Play className="w-4 h-4 mr-2" />
+                    Scan file
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
+            {userMaps.length > 0 && (
                 <Card className="overflow-hidden shrink-0">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">My Maps</CardTitle>
@@ -976,7 +960,6 @@ export function Analysis() {
               </CardContent>
             </Card>
           </div>
-        )}
 
         {/* Checksum Section - Below Analysis and Viewer */}
         {fileId && (
