@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAnalysisStore, MapCandidate } from '../store/analysisStore'
 import { useEditStore } from '../store/editStore'
-import { formatBytes } from '../lib/utils'
+import { formatBytes, formatHexOffset } from '../lib/utils'
 import { toast } from '../hooks/use-toast'
-import { Card, CardContent } from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Progress } from '../components/ui/progress'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
@@ -12,11 +12,13 @@ import { Header } from '../components/Header'
 import { HexViewer } from '../components/HexViewer'
 import { ResultsTable } from '../components/ResultsTable'
 import { Map3DViewer } from '../components/Map3DViewer'
+import { MapTextViewer } from '../components/MapTextViewer'
 import { ChecksumConfigDialog } from '../components/ChecksumConfigDialog'
 import { ChecksumDetectPopup } from '../components/ChecksumDetectPopup'
 import { ChecksumStatus } from '../components/ChecksumStatus'
 import { ChecksumTester } from '../components/ChecksumTester'
 import { ExportDialog } from '../components/ExportDialog'
+import { MapPropertiesDialog } from '../components/MapPropertiesDialog'
 import { createScan, getScanResults, type CandidateResponse } from '../services/scanService'
 import { applyEdits, type EditOperation, type ChecksumConfig } from '../services/editService'
 import { downloadFile } from '../services/fileService'
@@ -32,7 +34,9 @@ import {
   Box,
   Code2,
   Save,
-  Shield
+  Shield,
+  Map,
+  List
 } from 'lucide-react'
 
 export function Analysis() {
@@ -52,7 +56,13 @@ export function Analysis() {
     scanId,
     setScanId,
     selectedCandidate,
+    setSelectedCandidate,
     setFileData,
+    userMaps,
+    addUserMap,
+    updateUserMap,
+    setUserMaps,
+    updateCandidate,
   } = useAnalysisStore()
   
   // Use selectors to ensure reactivity
@@ -72,14 +82,42 @@ export function Analysis() {
     }
   }, [fileData, fileId, setEditFile])
 
+  // Persist "My Maps" per file: load when file is selected
+  const USER_MAPS_STORAGE_KEY = 'easytuner-user-maps'
+  useEffect(() => {
+    if (!fileId) return
+    try {
+      const raw = localStorage.getItem(`${USER_MAPS_STORAGE_KEY}-${fileId}`)
+      if (raw) {
+        const parsed = JSON.parse(raw) as MapCandidate[]
+        if (Array.isArray(parsed)) setUserMaps(parsed)
+      }
+    } catch {
+      // ignore invalid stored data
+    }
+  }, [fileId, setUserMaps])
+
+  // Save "My Maps" to localStorage whenever they change (for current file)
+  useEffect(() => {
+    if (!fileId) return
+    try {
+      localStorage.setItem(`${USER_MAPS_STORAGE_KEY}-${fileId}`, JSON.stringify(userMaps))
+    } catch {
+      // ignore quota or serialization errors
+    }
+  }, [fileId, userMaps])
+
   const [scanComplete, setScanComplete] = useState(false)
-  const [viewMode, setViewMode] = useState<'hex' | '3d'>('hex')
+  const [viewMode, setViewMode] = useState<'hex' | 'text' | '3d'>('hex')
   const [checksumConfig, setChecksumConfig] = useState<ChecksumConfig | null>(null)
   const [showChecksumDetectPopup, setShowChecksumDetectPopup] = useState(false)
   const [showChecksumDialog, setShowChecksumDialog] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [checksumValidation, setChecksumValidation] = useState<ChecksumValidationResponse | null>(null)
   const [isValidatingChecksum, setIsValidatingChecksum] = useState(false)
+  const [showMapPropsDialog, setShowMapPropsDialog] = useState(false)
+  /** null = create new; otherwise edit this map (user or analysis) */
+  const [mapPropsTarget, setMapPropsTarget] = useState<MapCandidate | null | 'new'>(null)
 
   // Block navigation during scan using beforeunload and history blocking
   useEffect(() => {
@@ -688,6 +726,21 @@ export function Analysis() {
                   </>
                 )}
               </Button>
+
+              <Button
+                variant="outline"
+                size={isMobile ? "sm" : "default"}
+                onClick={() => {
+                  setMapPropsTarget('new')
+                  setShowMapPropsDialog(true)
+                }}
+                disabled={!fileId || isScanning}
+                className="flex-1 md:flex-initial"
+              >
+                <Map className="w-4 h-4 md:mr-2" />
+                <span className="hidden md:inline">Make a map</span>
+                <span className="md:hidden">Map</span>
+              </Button>
             </div>
           </div>
 
@@ -726,21 +779,86 @@ export function Analysis() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Results Table */}
-            <div className="min-h-[400px] lg:h-[calc(100vh-200px)]">
-              <ResultsTable />
+            {/* Left column: My Maps (above) + Analysis Results – viewer always on the right */}
+            <div className="flex flex-col gap-6 min-h-[400px] lg:h-[calc(100vh-200px)]">
+              {userMaps.length > 0 && (
+                <Card className="overflow-hidden shrink-0">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">My Maps</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Click a map to view; double-click to configure.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="border-t border-border">
+                      <div className="grid grid-cols-[minmax(0,1fr)_80px_100px_100px_100px] gap-4 px-4 py-2 text-xs font-semibold text-muted-foreground bg-muted/50">
+                        <div>Name</div>
+                        <div>Type</div>
+                        <div>Offset</div>
+                        <div>Size</div>
+                        <div>Dimensions</div>
+                      </div>
+                      {userMaps.map((map) => {
+                        const isSelected = selectedCandidate?.id === map.id
+                        return (
+                          <div
+                            key={map.id}
+                            className={`grid grid-cols-[minmax(0,1fr)_80px_100px_100px_100px] gap-4 px-4 py-3 border-t border-border cursor-pointer hover:bg-accent/50 transition-colors ${
+                              isSelected ? 'bg-primary/20 hover:bg-primary/30' : ''
+                            }`}
+                            onClick={() => setSelectedCandidate(map)}
+                            onDoubleClick={(e) => {
+                              e.preventDefault()
+                              setMapPropsTarget(map)
+                              setShowMapPropsDialog(true)
+                            }}
+                          >
+                            <div className="min-w-0 truncate font-medium">
+                              {map.name || map.description || 'Unnamed map'}
+                            </div>
+                            <div>
+                              <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-primary/20 text-primary">
+                                {map.type === 'single' ? 'Single' : map.type}
+                              </span>
+                            </div>
+                            <div className="font-mono text-sm text-muted-foreground">
+                              {formatHexOffset(map.offset)}
+                            </div>
+                            <div className="font-mono text-sm text-muted-foreground">
+                              {map.size} B
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {map.dimensions
+                                ? `${map.dimensions.x}×${map.dimensions.y ?? 0}`
+                                : '–'}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              <div className="flex-1 min-h-0">
+                <ResultsTable
+                  onConfigureCandidate={(c) => {
+                    setMapPropsTarget(c)
+                    setShowMapPropsDialog(true)
+                  }}
+                />
+              </div>
             </div>
-            
-            {/* Viewer Panel with Tabs */}
+
+            {/* Right column: Viewer (Hex | Text | 3D) */}
             <Card className="min-h-[400px] lg:h-[calc(100vh-200px)] flex flex-col">
               <CardContent className="flex-1 overflow-hidden p-0">
                 <Tabs 
                   value={viewMode} 
-                  onValueChange={(value) => setViewMode(value as 'hex' | '3d')}
+                  onValueChange={(value) => setViewMode(value as 'hex' | 'text' | '3d')}
                   className="h-full flex flex-col"
                 >
                   <div className="border-b border-border px-2 md:px-4 pt-4">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                       <TabsTrigger 
                         value="hex" 
                         className="flex items-center gap-1 md:gap-2 text-xs md:text-sm"
@@ -748,6 +866,14 @@ export function Analysis() {
                         <Code2 className="w-4 h-4 shrink-0" />
                         <span className="hidden sm:inline">Hex Viewer</span>
                         <span className="sm:hidden">Hex</span>
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="text" 
+                        className="flex items-center gap-1 md:gap-2 text-xs md:text-sm"
+                      >
+                        <List className="w-4 h-4 shrink-0" />
+                        <span className="hidden sm:inline">Text Viewer</span>
+                        <span className="sm:hidden">Text</span>
                       </TabsTrigger>
                       <TabsTrigger 
                         value="3d" 
@@ -769,6 +895,56 @@ export function Analysis() {
                     <div className="h-full p-4">
                       <HexViewer noCard />
                     </div>
+                  </TabsContent>
+
+                  <TabsContent value="text" className="flex-1 overflow-hidden m-0 mt-0">
+                    {selectedCandidate && fileData ? (
+                      <div className="h-full">
+                        <MapTextViewer
+                          candidate={selectedCandidate}
+                          fileData={fileData}
+                          noCard
+                          onUpdateAxis={(axis, values) => {
+                            const key = axis === 'x' ? 'xAxis' : 'yAxis'
+                            const axisConfig = selectedCandidate[key] ?? {}
+                            const next = {
+                              ...selectedCandidate,
+                              [key]: { ...axisConfig, dataSource: 'editable_numbers' as const, axisValues: values },
+                            }
+                            if (userMaps.some((m) => m.id === selectedCandidate.id)) {
+                              updateUserMap(selectedCandidate.id, next)
+                            } else {
+                              updateCandidate(selectedCandidate.id, next)
+                            }
+                          }}
+                          onUpdateCell={(row, col, value) => {
+                            const key = `${row},${col}`
+                            const next = {
+                              ...selectedCandidate,
+                              dataOverrides: { ...(selectedCandidate.dataOverrides ?? {}), [key]: value },
+                            }
+                            if (userMaps.some((m) => m.id === selectedCandidate.id)) {
+                              updateUserMap(selectedCandidate.id, next)
+                            } else {
+                              updateCandidate(selectedCandidate.id, next)
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-full flex items-center justify-center p-4">
+                        <div className="text-center space-y-2">
+                          <List className="w-12 h-12 mx-auto text-muted-foreground" />
+                          <p className="text-muted-foreground">
+                            {!selectedCandidate
+                              ? 'Select a map to view as text grid'
+                              : !fileData
+                              ? 'File data is loading...'
+                              : 'Unable to load text view'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </TabsContent>
                   
                   <TabsContent value="3d" className="flex-1 overflow-hidden m-0 mt-0">
@@ -870,6 +1046,38 @@ export function Analysis() {
         validationResult={checksumValidation}
         isValidating={isValidatingChecksum}
         fileName={fileName || 'firmware.bin'}
+      />
+
+      {/* Map Properties Dialog (create or edit map) */}
+      <MapPropertiesDialog
+        open={showMapPropsDialog}
+        onClose={() => {
+          setShowMapPropsDialog(false)
+          setMapPropsTarget(null)
+        }}
+        onSave={(map) => {
+          if (mapPropsTarget === 'new' || mapPropsTarget === null) {
+            addUserMap(map)
+            setSelectedCandidate({ ...map, id: map.id, confidence: 100 })
+            toast.success('Map created', { description: map.name || 'Custom map added to My Maps.' })
+          } else if (userMaps.some((m) => m.id === mapPropsTarget.id)) {
+            updateUserMap(map.id, map)
+            setSelectedCandidate(map)
+            toast.success('Map updated', { description: 'Map properties saved.' })
+          } else {
+            updateCandidate(map.id, map)
+            setSelectedCandidate(map)
+            toast.success('Map updated', { description: 'Analysis map properties saved.' })
+          }
+          setShowMapPropsDialog(false)
+          setMapPropsTarget(null)
+        }}
+        initialMap={
+          showMapPropsDialog && mapPropsTarget !== null && mapPropsTarget !== 'new'
+            ? mapPropsTarget
+            : null
+        }
+        fileSize={fileSize}
       />
     </div>
   )

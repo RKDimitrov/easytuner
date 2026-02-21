@@ -6,14 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Slider } from './ui/slider'
 import { ConfidenceGauge } from './ConfidenceGauge'
-import { Filter, X } from 'lucide-react'
+import { Filter, X, Settings2 } from 'lucide-react'
 
-export function ResultsTable() {
+interface ResultsTableProps {
+  /** When provided, double-click or configure button opens map properties */
+  onConfigureCandidate?: (candidate: MapCandidate) => void
+}
+
+export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
   const candidates = useAnalysisStore((state) => state.candidates)
   const selectedCandidate = useAnalysisStore((state) => state.selectedCandidate)
   const setSelectedCandidate = useAnalysisStore((state) => state.setSelectedCandidate)
 
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['1D', '2D', '3D']))
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['single', '1D', '2D', '3D']))
   const [confidenceRange, setConfidenceRange] = useState<[number, number]>([0, 100])
   const [showFilters, setShowFilters] = useState(false)
 
@@ -51,8 +56,13 @@ export function ResultsTable() {
     setSelectedCandidate(candidate)
   }
 
+  const handleRowDoubleClick = (candidate: MapCandidate, e: React.MouseEvent) => {
+    e.preventDefault()
+    onConfigureCandidate?.(candidate)
+  }
+
   const resetFilters = () => {
-    setTypeFilter(new Set(['1D', '2D', '3D']))
+    setTypeFilter(new Set(['single', '1D', '2D', '3D']))
     setConfidenceRange([0, 100])
   }
 
@@ -82,7 +92,7 @@ export function ResultsTable() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Type</label>
               <div className="flex gap-2">
-                {(['1D', '2D', '3D'] as const).map((type) => (
+                {(['single', '1D', '2D', '3D'] as const).map((type) => (
                   <Button
                     key={type}
                     variant={typeFilter.has(type) ? 'default' : 'outline'}
@@ -143,12 +153,13 @@ export function ResultsTable() {
             >
               {/* Table header */}
               <div className="sticky top-0 z-10 bg-card border-b border-border">
-                <div className="grid grid-cols-[80px_100px_120px_1fr_100px] gap-4 px-4 py-2 text-xs font-semibold text-muted-foreground">
+                <div className="grid grid-cols-[80px_100px_120px_1fr_100px_auto] gap-4 px-4 py-2 text-xs font-semibold text-muted-foreground">
                   <div>Type</div>
                   <div>Offset</div>
                   <div>Size</div>
                   <div>Confidence</div>
                   <div>Dimensions</div>
+                  {onConfigureCandidate ? <div className="w-9" /> : null}
                 </div>
               </div>
 
@@ -169,24 +180,27 @@ export function ResultsTable() {
                       transform: `translateY(${virtualRow.start + 40}px)`, // Offset for header
                     }}
                   >
-                    <div
-                      className={`grid grid-cols-[80px_100px_120px_1fr_100px] gap-4 px-4 py-3 border-b border-border cursor-pointer hover:bg-accent/50 transition-colors ${
+<div
+                    className={`grid grid-cols-[80px_100px_120px_1fr_100px_auto] gap-4 px-4 py-3 border-b border-border cursor-pointer hover:bg-accent/50 transition-colors ${
                         isSelected ? 'bg-primary/20 hover:bg-primary/30' : ''
                       }`}
                       onClick={() => handleRowClick(candidate)}
+                      onDoubleClick={(e) => handleRowDoubleClick(candidate, e)}
                     >
                       {/* Type */}
                       <div>
                         <span
                           className={`inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded ${
-                            candidate.type === '1D'
+                            candidate.type === 'single'
+                              ? 'bg-muted text-muted-foreground'
+                              : candidate.type === '1D'
                               ? 'bg-success/20 text-success'
                               : candidate.type === '2D'
                               ? 'bg-primary/20 text-primary'
                               : 'bg-warning/20 text-warning'
                           }`}
                         >
-                          {candidate.type}
+                          {candidate.type === 'single' ? 'Single' : candidate.type}
                         </span>
                       </div>
 
@@ -208,13 +222,33 @@ export function ResultsTable() {
                       {/* Dimensions */}
                       <div className="text-sm text-muted-foreground">
                         {candidate.dimensions
-                          ? candidate.type === '1D'
+                          ? candidate.type === 'single'
+                            ? '1'
+                            : candidate.type === '1D'
                             ? `${candidate.dimensions.x}`
                             : candidate.type === '3D'
                             ? `${candidate.dimensions.x}×${candidate.dimensions.y || 0}×${candidate.dimensions.z || 0}`
                             : `${candidate.dimensions.x}×${candidate.dimensions.y || 0}`
                           : 'N/A'}
                       </div>
+
+                      {/* Configure */}
+                      {onConfigureCandidate ? (
+                        <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              onConfigureCandidate(candidate)
+                            }}
+                            title="Configure map"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )

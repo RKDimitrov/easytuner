@@ -3,10 +3,13 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAnalysisStore } from '../store/analysisStore'
 import { useEditStore } from '../store/editStore'
 import { downloadFile } from '../services/fileService'
-import { formatHexOffset, byteToHex, isPrintableAscii, cn } from '../lib/utils'
+import { formatHexOffset, wordToHexLE, isPrintableAscii, cn } from '../lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
 import { toast } from '../hooks/use-toast'
 import { EditPanel } from './EditPanel'
+import { ArrowRight } from 'lucide-react'
 
 const BYTES_PER_ROW = 16
 
@@ -30,6 +33,7 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
   const parentRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [editOffset, setEditOffset] = useState<number | null>(null)
+  const [goToAddressInput, setGoToAddressInput] = useState('')
 
   // Use modified file data if available, otherwise original
   const displayData = modifiedFileData || fileData
@@ -45,47 +49,49 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
     overscan: 10,
   })
 
-  // Function to determine byte color based on state
-  const getByteColor = (byteIndex: number) => {
-    // Check if this byte is part of an edit
+  /** Color for 16-bit word cell if either byte is in selection/edit/bookmark/annotation */
+  const getWordColor = (byteIndex: number) => {
+    const byte2 = byteIndex + 1
     const isEdited = Array.from(edits.values()).some(edit => {
       const size = edit.dataType === 'u8' ? 1 : edit.dataType.includes('16') ? 2 : 4
-      return byteIndex >= edit.offset && byteIndex < edit.offset + size
+      const end = edit.offset + size
+      return (byteIndex >= edit.offset && byteIndex < end) || (byte2 >= edit.offset && byte2 < end)
     })
-    
-    if (isEdited) {
-      return 'bg-yellow-500/30 text-yellow-700 dark:text-yellow-400 border border-yellow-500/50'
+    if (isEdited) return 'bg-yellow-500/30 text-yellow-700 dark:text-yellow-400 border border-yellow-500/50'
+    if (selectedCandidate) {
+      const end = selectedCandidate.offset + selectedCandidate.size
+      if ((byteIndex >= selectedCandidate.offset && byteIndex < end) || (byte2 >= selectedCandidate.offset && byte2 < end))
+        return 'bg-primary/30 text-primary border border-primary/50'
     }
-    
-    // Selected candidate (blue)
-    if (
-      selectedCandidate &&
-      byteIndex >= selectedCandidate.offset &&
-      byteIndex < selectedCandidate.offset + selectedCandidate.size
-    ) {
-      return 'bg-primary/30 text-primary border border-primary/50'
-    }
-
-    // Bookmarks (red)
-    const bookmark = bookmarks.find((b) => byteIndex === b.offset)
-    if (bookmark) {
-      return 'bg-destructive/30 text-destructive border border-destructive/50'
-    }
-
-    // Annotations (green)
-    const annotation = annotations.find(
-      (a) => byteIndex >= a.offset && byteIndex < a.offset + a.length
-    )
-    if (annotation) {
-      return 'bg-success/30 text-success border border-success/50'
-    }
-
+    const bookmarkLo = bookmarks.find((b) => b.offset === byteIndex)
+    const bookmarkHi = bookmarks.find((b) => b.offset === byte2)
+    if (bookmarkLo || bookmarkHi) return 'bg-destructive/30 text-destructive border border-destructive/50'
+    const annotationLo = annotations.find((a) => byteIndex >= a.offset && byteIndex < a.offset + a.length)
+    const annotationHi = annotations.find((a) => byte2 >= a.offset && byte2 < a.offset + a.length)
+    if (annotationLo || annotationHi) return 'bg-success/30 text-success border border-success/50'
     return 'text-muted-foreground'
   }
   
-  // Handle double-click on hex byte
+  // Handle double-click on hex byte (or word start in word view)
   const handleByteDoubleClick = (byteIndex: number) => {
     setEditOffset(byteIndex)
+  }
+
+  // Go to address: parse hex and scroll to that row
+  const handleGoToAddress = (e: React.FormEvent) => {
+    e.preventDefault()
+    const s = goToAddressInput.trim().replace(/^0x/i, '')
+    if (!s) return
+    const offset = parseInt(s, 16)
+    if (isNaN(offset) || offset < 0) {
+      toast.error('Invalid address', { description: 'Enter a valid hex address (e.g. 0x100 or 100)' })
+      return
+    }
+    const maxOffset = displayData ? displayData.length - 1 : 0
+    const clampedOffset = Math.min(Math.max(0, offset), maxOffset)
+    const row = Math.floor(clampedOffset / BYTES_PER_ROW)
+    rowVirtualizer.scrollToIndex(row, { align: 'center' })
+    setGoToAddressInput(formatHexOffset(clampedOffset))
   }
 
   // Fetch file from backend if fileId exists but fileData doesn't
@@ -128,11 +134,32 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
   }, [selectedCandidate, rowVirtualizer, displayData])
   
   const content = (
-        <div
-          ref={parentRef}
-          className="h-full overflow-auto bg-card"
-          style={{ contain: 'strict' }}
-        >
+        <div className="h-full flex flex-col min-h-0">
+          {/* Go to address bar */}
+          <form
+            onSubmit={handleGoToAddress}
+            className="flex items-center gap-2 p-2 border-b border-border bg-muted/30 shrink-0"
+          >
+            <label htmlFor="hex-goto-address" className="text-sm font-medium whitespace-nowrap">
+              Go to address
+            </label>
+            <Input
+              id="hex-goto-address"
+              type="text"
+              value={goToAddressInput}
+              onChange={(e) => setGoToAddressInput(e.target.value)}
+              placeholder="0x00000"
+              className="font-mono w-28 h-8"
+            />
+            <Button type="submit" size="sm" variant="secondary" className="h-8">
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </form>
+          <div
+            ref={parentRef}
+            className="flex-1 overflow-auto bg-card min-h-0"
+            style={{ contain: 'strict' }}
+          >
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,
@@ -163,31 +190,25 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
                       {formatHexOffset(rowOffset)}
                     </span>
 
-                    {/* Hex bytes */}
-                    <div className="flex gap-1 flex-1">
-                      {Array.from(rowBytes).map((byte, colIndex) => {
-                        const byteIndex = rowOffset + colIndex
+                    {/* 16-bit words (WinOLS-style, 4 hex digits per word) */}
+                    <div className="flex gap-1 flex-1 flex-wrap">
+                      {[0, 1, 2, 3, 4, 5, 6, 7].map((wordIndex) => {
+                        const byteIndex = rowOffset + wordIndex * 2
+                        const wordStr = displayData ? wordToHexLE(displayData, byteIndex) : '????'
                         return (
                           <span
-                            key={colIndex}
+                            key={wordIndex}
                             className={cn(
-                              'hex-byte rounded px-0.5 cursor-pointer hover:ring-2 hover:ring-ring',
-                              getByteColor(byteIndex)
+                              'hex-word rounded px-1 cursor-pointer hover:ring-2 hover:ring-ring',
+                              getWordColor(byteIndex)
                             )}
-                            title={`Offset: ${formatHexOffset(byteIndex)}, Value: ${byte} (Double-click to edit)`}
+                            title={`Offset: ${formatHexOffset(byteIndex)} (16-bit LE). Double-click to edit.`}
                             onDoubleClick={() => handleByteDoubleClick(byteIndex)}
                           >
-                            {byteToHex(byte)}
+                            {wordStr}
                           </span>
                         )
                       })}
-                      {/* Padding for incomplete rows */}
-                      {rowBytes.length < BYTES_PER_ROW &&
-                        Array.from({ length: BYTES_PER_ROW - rowBytes.length }).map((_, i) => (
-                          <span key={`pad-${i}`} className="hex-byte opacity-0">
-                            00
-                          </span>
-                        ))}
                     </div>
 
                     {/* ASCII column */}
@@ -207,6 +228,7 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
             offset={editOffset}
             onClose={() => setEditOffset(null)}
           />
+          </div>
         </div>
   )
 

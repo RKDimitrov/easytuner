@@ -54,6 +54,9 @@ class ScoringWeights:
     DATA_QUALITY_WEIGHT = 0.02      # WAS: 0.00 - Restored to 0.02
     AREA_TIEBREAK_WEIGHT = 0.05     # WAS: 0.00 - Restored to 0.05
     
+    # Structural (autocorrelation) score - complements Shannon/entropy detection
+    STRUCTURAL_WEIGHT = 0.15
+    
     # Keep deactivated - still causes issues
     VARIATION_WEIGHT = 0.00         # Still 0.00
 
@@ -63,6 +66,7 @@ class ScoringResult:
     """Container for scoring results."""
     candidate_id: int
     score: float
+    structural_score: float
     entropy_score: float
     smoothness_score: float
     row_diff_score: float
@@ -333,6 +337,7 @@ def calculate_candidate_score(metrics: Dict[str, Any], width: int, height: int) 
     value_range_score = metrics.get('value_range_score', 0.0)
     nan_frequency = metrics.get('nan_frequency', 0.0)
     inf_frequency = metrics.get('inf_frequency', 0.0)
+    structural_score = float(np.clip(metrics.get('structural_score', 0.5), 0.0, 1.0))
     
     # Calculate individual normalized scores
     entropy_score = normalize_entropy_score(entropy)
@@ -348,7 +353,7 @@ def calculate_candidate_score(metrics: Dict[str, Any], width: int, height: int) 
     data_quality_score = normalize_data_quality_score(nan_frequency, inf_frequency)
     area_score = normalize_area_score(width, height)
     
-    # Calculate weighted total score
+    # Calculate weighted total score (Shannon-based + structural)
     total_score = (
         ScoringWeights.ENTROPY_WEIGHT * entropy_score +
         ScoringWeights.SMOOTHNESS_WEIGHT * smoothness_score +
@@ -361,12 +366,18 @@ def calculate_candidate_score(metrics: Dict[str, Any], width: int, height: int) 
         ScoringWeights.VALUE_COHERENCE_WEIGHT * value_coherence_score +
         ScoringWeights.VALUE_RANGE_WEIGHT * value_range_score_norm +
         ScoringWeights.DATA_QUALITY_WEIGHT * data_quality_score +
-        ScoringWeights.AREA_TIEBREAK_WEIGHT * area_score
+        ScoringWeights.AREA_TIEBREAK_WEIGHT * area_score +
+        ScoringWeights.STRUCTURAL_WEIGHT * structural_score
     )
+    
+    # Consensus: cap score if structural signal is weak (reduces confidence fluctuations)
+    if structural_score < 0.35:
+        total_score = min(total_score, 0.72)
     
     return ScoringResult(
         candidate_id=0,  # Will be set by caller
         score=total_score,
+        structural_score=structural_score,
         entropy_score=entropy_score,
         smoothness_score=smoothness_score,
         row_diff_score=row_diff_score,
@@ -411,6 +422,7 @@ def rank_candidates(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         candidate_copy = candidate.copy()
         candidate_copy['score'] = scoring_result.score
         candidate_copy['scoring_breakdown'] = {
+            'structural_score': scoring_result.structural_score,
             'entropy_score': scoring_result.entropy_score,
             'smoothness_score': scoring_result.smoothness_score,
             'row_diff_score': scoring_result.row_diff_score,

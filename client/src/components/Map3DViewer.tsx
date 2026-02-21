@@ -814,13 +814,15 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
     <div className="flex items-center justify-between mb-4">
       <div>
         <h3 className="text-lg font-semibold">
-          3D Map Visualization - {candidate.type} Map
+          3D Map Visualization - {candidate.type === 'single' ? 'Single value' : candidate.type} Map
         </h3>
         <div className="text-sm text-muted-foreground mt-1">
           Offset: {formatHexOffset(candidate.offset)} | 
           Size: {candidate.size} bytes | 
           Confidence: {candidate.confidence}% | 
-          Dimensions: {candidate.type === '1D' 
+          Dimensions: {candidate.type === 'single'
+            ? '1'
+            : candidate.type === '1D' 
             ? candidate.dimensions?.x 
             : candidate.type === '3D'
             ? `${candidate.dimensions?.x}×${candidate.dimensions?.y || 0}×${candidate.dimensions?.z || 0}`
@@ -886,7 +888,7 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
 
   const viewerContent = (
     <div ref={containerRef} className="w-full h-full bg-background relative flex flex-col">
-      {candidate.type === '2D' && (
+      {(candidate.type === 'single' || candidate.type === '2D') && (
         <>
           {viewMode === 'grid' && render2DMap()}
           {viewMode === '3d' && render3DSurfaceView()}
@@ -921,7 +923,7 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">
-            3D Map Visualization - {candidate.type} Map
+            3D Map Visualization - {candidate.type === 'single' ? 'Single value' : candidate.type} Map
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleReset}>
@@ -938,7 +940,9 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
           Offset: {formatHexOffset(candidate.offset)} | 
           Size: {candidate.size} bytes | 
           Confidence: {candidate.confidence}% | 
-          Dimensions: {candidate.type === '1D' 
+          Dimensions: {candidate.type === 'single'
+            ? '1'
+            : candidate.type === '1D' 
             ? candidate.dimensions.x 
             : candidate.type === '3D'
             ? `${candidate.dimensions.x}×${candidate.dimensions.y || 0}×${candidate.dimensions.z || 0}`

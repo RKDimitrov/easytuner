@@ -29,6 +29,7 @@ from ecumap.hypothesis import generate_hypotheses, MapHypothesis
 from ecumap.interpret import get_supported_element_types
 from ecumap.metrics import (
     compute_map_metrics,
+    compute_structural_autocorrelation_score,
     metrics_to_dict
 )
 from ecumap.scorer import rank_candidates
@@ -173,6 +174,8 @@ def find_maps_real(file_path: Path, top_k: int = 20, config: Optional[Segmentati
                 # Now we can *accurately* score it.
                 map_metrics = compute_map_metrics(hypothesis.map_data, hypothesis.element_type)
                 metrics_dict = metrics_to_dict(map_metrics)
+                # Structural (autocorrelation) score - complements Shannon-based detection
+                metrics_dict['structural_score'] = compute_structural_autocorrelation_score(hypothesis.map_data)
                 
                 # Get block stats for *this specific map region*
                 map_size_bytes = hypothesis.end_offset - hypothesis.start_offset
@@ -209,6 +212,7 @@ def find_maps_real(file_path: Path, top_k: int = 20, config: Optional[Segmentati
                         "jump_anomaly": metrics_dict['jump_anomaly'],
                         "local_coherence": metrics_dict['local_coherence'],
                         "gradient_distribution_quality": metrics_dict['gradient_distribution_quality'],
+                        "structural_score": metrics_dict.get('structural_score', 0.5),
                         # Basic size/value stats
                         "size_bytes": map_size_bytes,
                         "min_value": float(np.min(hypothesis.map_data)),
@@ -286,6 +290,7 @@ def exhaustive_axis_search(data: bytes, top_k: int = 20) -> List[Dict[str, Any]]
                 # Process each hypothesis
                 map_metrics = compute_map_metrics(hypothesis.map_data, hypothesis.element_type)
                 metrics_dict = metrics_to_dict(map_metrics)
+                metrics_dict['structural_score'] = compute_structural_autocorrelation_score(hypothesis.map_data)
                 
                 map_size_bytes = hypothesis.end_offset - hypothesis.start_offset
                 
@@ -320,6 +325,7 @@ def exhaustive_axis_search(data: bytes, top_k: int = 20) -> List[Dict[str, Any]]
                         "jump_anomaly": metrics_dict['jump_anomaly'],
                         "local_coherence": metrics_dict['local_coherence'],
                         "gradient_distribution_quality": metrics_dict['gradient_distribution_quality'],
+                        "structural_score": metrics_dict.get('structural_score', 0.5),
                         "size_bytes": map_size_bytes,
                         "min_value": float(np.min(hypothesis.map_data)),
                         "max_value": float(np.max(hypothesis.map_data)),

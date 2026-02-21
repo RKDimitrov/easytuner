@@ -432,6 +432,51 @@ def compute_local_coherence(array: np.ndarray) -> float:
     return float(coherence)
 
 
+def compute_structural_autocorrelation_score(array: np.ndarray) -> float:
+    """
+    Structural (autocorrelation-based) score complementary to Shannon entropy.
+    Real calibration maps have smooth structure: adjacent rows and columns
+    are highly correlated. Random or misaligned data has low correlation.
+    
+    This algorithm is independent of entropy and helps confirm map-like
+    structure, reducing confidence fluctuations and false positives.
+    
+    Returns:
+        Structural score (0-1, higher is better)
+    """
+    if array.size == 0:
+        return 0.0
+    if array.shape[0] < 2 and array.shape[1] < 2:
+        return 0.5  # Neutral for single-cell
+    
+    value_range = np.ptp(array)
+    if value_range == 0:
+        return 0.5  # Flat data: neutral
+    
+    scores = []
+    
+    # Row-wise: correlation between adjacent rows
+    if array.shape[0] >= 2:
+        row_diffs = np.abs(array[1:, :] - array[:-1, :])
+        mean_row_diff = np.mean(row_diffs) / value_range
+        # Low diff -> high score (smooth along rows)
+        row_score = np.exp(-mean_row_diff * 5.0)
+        scores.append(float(np.clip(row_score, 0.0, 1.0)))
+    
+    # Column-wise: correlation between adjacent columns
+    if array.shape[1] >= 2:
+        col_diffs = np.abs(array[:, 1:] - array[:, :-1])
+        mean_col_diff = np.mean(col_diffs) / value_range
+        col_score = np.exp(-mean_col_diff * 5.0)
+        scores.append(float(np.clip(col_score, 0.0, 1.0)))
+    
+    if not scores:
+        return 0.5
+    
+    # Average; real maps score high on both dimensions
+    return float(np.clip(np.mean(scores), 0.0, 1.0))
+
+
 def compute_gradient_distribution_score(array: np.ndarray) -> float:
     """
     Analyzes the distribution of gradients.

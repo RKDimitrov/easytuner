@@ -190,6 +190,7 @@ class ScanService:
             entropy_threshold = config.get('entropy_threshold', 7.2)
             min_block_size = config.get('min_block_size', 256)
             top_k = config.get('top_k', 20)  # Number of top candidates to return
+            min_confidence = float(config.get('min_confidence', 0.5))
             
             # Create segmentation configuration
             seg_config = SegmentationConfig(
@@ -281,6 +282,14 @@ class ScanService:
                 # For 3D maps, we'd need to extract z dimension if available
                 # For now, 2D maps use x and y
                 
+                # Get confidence from score (already normalized 0-1)
+                confidence = float(ecumap_candidate.get('score', 0.0))
+                confidence = max(0.0, min(1.0, confidence))
+                
+                # Skip candidates below min_confidence (removes low-confidence detections)
+                if confidence < min_confidence:
+                    continue
+                
                 # Extract metrics as feature scores
                 metrics = ecumap_candidate.get('metrics', {})
                 feature_scores = {
@@ -298,13 +307,9 @@ class ScanService:
                     'jump_anomaly': metrics.get('jump_anomaly', 0.0),
                     'local_coherence': metrics.get('local_coherence', 0.0),
                     'gradient_distribution_quality': metrics.get('gradient_distribution_quality', 0.0),
+                    'structural_score': metrics.get('structural_score', 0.5),
                     'score': ecumap_candidate.get('score', 0.0)
                 }
-                
-                # Get confidence from score (already normalized 0-1)
-                confidence = float(ecumap_candidate.get('score', 0.0))
-                # Ensure confidence is in valid range
-                confidence = max(0.0, min(1.0, confidence))
                 
                 candidate = Candidate(
                     scan_id=scan_id,

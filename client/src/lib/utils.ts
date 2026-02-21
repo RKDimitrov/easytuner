@@ -20,17 +20,28 @@ export function formatBytes(bytes: number, decimals = 2): string {
 }
 
 /**
- * Format hex offset
+ * Format hex offset (min 5 digits, e.g. 0x684FA; larger addresses get 6+ digits)
  */
 export function formatHexOffset(offset: number): string {
-  return '0x' + offset.toString(16).toUpperCase().padStart(8, '0')
+  return '0x' + offset.toString(16).toUpperCase().padStart(5, '0')
 }
 
 /**
- * Convert byte to hex string
+ * Convert byte to hex string (2 digits)
  */
 export function byteToHex(byte: number): string {
   return byte.toString(16).toUpperCase().padStart(2, '0')
+}
+
+/**
+ * Convert 16-bit word to hex string (4 digits), little-endian: low byte first in memory
+ */
+export function wordToHexLE(data: Uint8Array, offset: number): string {
+  if (offset + 2 > data.length) return '????'
+  const lo = data[offset]
+  const hi = data[offset + 1]
+  const word = lo | (hi << 8)
+  return word.toString(16).toUpperCase().padStart(4, '0')
 }
 
 /**
