@@ -57,7 +57,7 @@ app.add_middleware(
 )
 
 # Include routers
-from app.routers import auth, checksum, edits, files, projects, scan
+from app.routers import auth, checksum, edits, files, library, projects, scan
 
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(projects.router, prefix=settings.api_v1_prefix)
@@ -65,6 +65,7 @@ app.include_router(files.router, prefix=settings.api_v1_prefix)
 app.include_router(edits.router, prefix=settings.api_v1_prefix)
 app.include_router(checksum.router, prefix=settings.api_v1_prefix)
 app.include_router(scan.router, prefix=settings.api_v1_prefix)
+app.include_router(library.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/", status_code=status.HTTP_200_OK)

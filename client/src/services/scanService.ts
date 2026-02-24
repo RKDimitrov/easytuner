@@ -70,6 +70,7 @@ export interface CandidateResponse {
   confidence: number
   pattern_type: string
   features: Record<string, any>
+  dimensions?: Record<string, number>
   created_at: string
 }
 

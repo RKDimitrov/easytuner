@@ -141,7 +141,7 @@ export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
         ) : (
           <div
             ref={parentRef}
-            className="h-full overflow-auto"
+            className="h-full overflow-auto min-h-[60vh]"
             style={{ contain: 'strict' }}
           >
             <div

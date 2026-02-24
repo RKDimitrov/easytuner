@@ -9,6 +9,7 @@ export interface Project {
   name: string
   description: string | null
   is_private: boolean
+  published_at: string | null
   created_at: string
   updated_at: string
   file_count?: number

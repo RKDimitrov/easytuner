@@ -2,6 +2,7 @@
 Project endpoints for managing user projects.
 """
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from app.models.project import Project
 from app.models.firmware_file import FirmwareFile
 from app.models.user import User
 from app.models.scan_job import ScanJob
+from app.models.candidate import Candidate
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +94,7 @@ async def list_projects(
                 "name": project.name,
                 "description": project.description,
                 "is_private": project.is_private,
+                "published_at": project.published_at.isoformat() if project.published_at else None,
                 "created_at": project.created_at.isoformat(),
                 "updated_at": project.updated_at.isoformat(),
                 "file_count": file_count or 0
@@ -171,10 +174,179 @@ async def get_project(
         "name": project.name,
         "description": project.description,
         "is_private": project.is_private,
+        "published_at": project.published_at.isoformat() if project.published_at else None,
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
         "file_count": file_count or 0
     }
+
+
+@router.post(
+    "/{project_id}/publish",
+    status_code=status.HTTP_200_OK,
+    summary="Publish project to library",
+    description="Publish a public project to the library so others can view it"
+)
+async def publish_project(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Publish project to library. Project must be public (is_private=False)."""
+    result = await db.execute(
+        select(Project)
+        .where(
+            Project.project_id == project_id,
+            Project.owner_user_id == current_user.user_id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or access denied"
+        )
+    if project.is_private:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Make the project public first (Settings → uncheck Private) to publish to the library"
+        )
+    project.published_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(project)
+    file_count_result = await db.execute(
+        select(func.count(FirmwareFile.file_id))
+        .where(
+            FirmwareFile.project_id == project_id,
+            FirmwareFile.deleted_at.is_(None)
+        )
+    )
+    file_count = file_count_result.scalar() or 0
+    return {
+        "project_id": str(project.project_id),
+        "owner_user_id": str(project.owner_user_id),
+        "name": project.name,
+        "description": project.description,
+        "is_private": project.is_private,
+        "published_at": project.published_at.isoformat(),
+        "created_at": project.created_at.isoformat(),
+        "updated_at": project.updated_at.isoformat(),
+        "file_count": file_count
+    }
+
+
+@router.delete(
+    "/{project_id}/publish",
+    status_code=status.HTTP_200_OK,
+    summary="Unpublish project from library",
+    description="Remove project from the public library"
+)
+async def unpublish_project(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Unpublish project from library."""
+    result = await db.execute(
+        select(Project)
+        .where(
+            Project.project_id == project_id,
+            Project.owner_user_id == current_user.user_id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or access denied"
+        )
+    project.published_at = None
+    await db.commit()
+    await db.refresh(project)
+    file_count_result = await db.execute(
+        select(func.count(FirmwareFile.file_id))
+        .where(
+            FirmwareFile.project_id == project_id,
+            FirmwareFile.deleted_at.is_(None)
+        )
+    )
+    file_count = file_count_result.scalar() or 0
+    return {
+        "project_id": str(project.project_id),
+        "owner_user_id": str(project.owner_user_id),
+        "name": project.name,
+        "description": project.description,
+        "is_private": project.is_private,
+        "published_at": None,
+        "created_at": project.created_at.isoformat(),
+        "updated_at": project.updated_at.isoformat(),
+        "file_count": file_count
+    }
+
+
+@router.get(
+    "/{project_id}/scans",
+    status_code=status.HTTP_200_OK,
+    summary="List project scans",
+    description="Get all scans for files in this project"
+)
+async def list_project_scans(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List scans for all files in the project."""
+    result = await db.execute(
+        select(Project)
+        .where(
+            Project.project_id == project_id,
+            Project.owner_user_id == current_user.user_id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or access denied"
+        )
+    # Get all files and their scans
+    files_result = await db.execute(
+        select(FirmwareFile)
+        .where(
+            FirmwareFile.project_id == project_id,
+            FirmwareFile.deleted_at.is_(None)
+        )
+        .order_by(FirmwareFile.uploaded_at.desc())
+    )
+    files_list = files_result.scalars().all()
+    scans = []
+    for f in files_list:
+        scans_result = await db.execute(
+            select(ScanJob)
+            .where(ScanJob.file_id == f.file_id)
+            .order_by(ScanJob.created_at.desc())
+        )
+        for scan in scans_result.scalars().all():
+            cand_count_result = await db.execute(
+                select(func.count(Candidate.candidate_id)).where(Candidate.scan_id == scan.scan_id)
+            )
+            cand_count = cand_count_result.scalar() or 0
+            scans.append({
+                "scan_id": str(scan.scan_id),
+                "file_id": str(f.file_id),
+                "filename": f.filename,
+                "status": scan.status,
+                "candidates_found": cand_count,
+                "processing_time_ms": scan.processing_time_ms,
+                "error_message": scan.error_message,
+                "started_at": scan.started_at.isoformat() if scan.started_at else None,
+                "completed_at": scan.completed_at.isoformat() if scan.completed_at else None,
+                "created_at": scan.created_at.isoformat(),
+            })
+    return {"scans": scans, "count": len(scans)}
 
 
 @router.post(
@@ -220,6 +392,7 @@ async def create_project(
             "name": project.name,
             "description": project.description,
             "is_private": project.is_private,
+            "published_at": project.published_at.isoformat() if project.published_at else None,
             "created_at": project.created_at.isoformat(),
             "updated_at": project.updated_at.isoformat(),
             "file_count": 0
@@ -284,6 +457,9 @@ async def update_project(
         project.description = project_data.description
     if project_data.is_private is not None:
         project.is_private = project_data.is_private
+        # Unpublish when making project private
+        if project_data.is_private:
+            project.published_at = None
     
     try:
         await db.commit()
@@ -305,6 +481,7 @@ async def update_project(
             "name": project.name,
             "description": project.description,
             "is_private": project.is_private,
+            "published_at": project.published_at.isoformat() if project.published_at else None,
             "created_at": project.created_at.isoformat(),
             "updated_at": project.updated_at.isoformat(),
             "file_count": file_count

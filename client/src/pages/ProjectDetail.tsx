@@ -7,10 +7,10 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, FileCode, Calendar, Lock, Globe, Upload, Settings, Activity, Eye, CheckCircle2, XCircle, Loader2, Trash2, Plus, Upload as UploadIcon, AlertCircle } from 'lucide-react'
+import { ArrowLeft, FileCode, Calendar, Lock, Globe, Upload, Settings, Activity, Eye, CheckCircle2, XCircle, Loader2, Trash2, Plus, Upload as UploadIcon, AlertCircle, BookMarked, FileText } from 'lucide-react'
 import { Header } from '../components/Header'
 import { Button } from '../components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Progress } from '../components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
@@ -23,10 +23,11 @@ import { Label } from '../components/ui/label'
 import { Switch } from '../components/ui/switch'
 import { useProjectStore } from '../store/projectStore'
 import { useAnalysisStore } from '../store/analysisStore'
+import { convertCandidateResponse } from '../lib/candidateConversion'
 import { Project, UpdateProjectData } from '../types/project'
 import { getProjectFiles, ProjectFile, downloadFile, deleteFile as deleteFileService, uploadFile } from '../services/fileService'
-import { updateProject } from '../services/projectService'
-import { getScanResults, type CandidateResponse } from '../services/scanService'
+import { updateProject, publishProject, unpublishProject, getProjectScans, type ProjectScanItem } from '../services/projectService'
+import { getScanResults } from '../services/scanService'
 import { formatBytes } from '../lib/utils'
 import { toast } from '../hooks/use-toast'
 import { useUploadStore } from '../store/uploadStore'
@@ -62,6 +63,9 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
   const [editDescription, setEditDescription] = useState(project.description || '')
   const [editIsPrivate, setEditIsPrivate] = useState(project.is_private)
   const [isSaving, setIsSaving] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const isPublished = Boolean(project.published_at)
+  const canPublish = !project.is_private
 
   const handleEditProject = () => {
     setEditName(project.name)
@@ -98,6 +102,28 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
     onUploadClick()
   }
 
+  const handlePublish = async () => {
+    if (!canPublish) return
+    try {
+      setIsPublishing(true)
+      if (isPublished) {
+        await unpublishProject(project.project_id)
+        toast.success('Project unpublished', { description: 'Removed from the library.' })
+      } else {
+        await publishProject(project.project_id)
+        toast.success('Project published', { description: 'Your project is now visible in the Library.' })
+      }
+      onProjectUpdate()
+    } catch (error) {
+      console.error('Publish/unpublish failed:', error)
+      toast.error(isPublished ? 'Failed to unpublish' : 'Failed to publish', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setIsPublishing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
@@ -131,8 +157,27 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
               {project.description && (
                 <p className="text-muted-foreground">{project.description}</p>
               )}
+              {project.is_private && (
+                <p className="text-sm text-muted-foreground">
+                  To publish to the Library: <strong>Edit Project</strong> → turn off <strong>Private</strong> → then click <strong>Publish to Library</strong> below.
+                </p>
+              )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={isPublished ? "outline" : "secondary"}
+                onClick={handlePublish}
+                disabled={!canPublish || isPublishing}
+                title={project.is_private ? 'Make the project public first (Edit Project → uncheck Private)' : isPublished ? 'Unpublish from Library' : 'Publish to Library'}
+                className={!canPublish ? "opacity-80" : ""}
+              >
+                {isPublishing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <BookMarked className="w-4 h-4 mr-2" />
+                )}
+                {isPublished ? 'Unpublish from Library' : 'Publish to Library'}
+              </Button>
               <Button variant="outline" onClick={handleEditProject}>
                 <Settings className="w-4 h-4 mr-2" />
                 Edit Project
@@ -492,138 +537,7 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
           // Load scan results using scan service
           const scanData = await getScanResults(file.latest_scan_id)
           setScanId(file.latest_scan_id)
-          
-          // Convert candidates to MapCandidate format (same logic as Analysis.tsx)
-          const convertCandidate = (c: CandidateResponse) => {
-            let dimensions: { x: number; y: number; z?: number } | undefined
-            
-            // Get dimensions directly from candidate.dimensions (not from empty dims object)
-            const dims = c.dimensions || {}
-            const features = c.features || {}
-            
-            // Determine type from pattern_type field (which comes from Candidate.type: '1D', '2D', '3D', 'scalar')
-            let type: '1D' | '2D' | '3D' = '2D'
-            if (c.pattern_type) {
-              const patternUpper = c.pattern_type.toUpperCase()
-              if (patternUpper === '1D' || patternUpper.includes('1D')) {
-                type = '1D'
-              } else if (patternUpper === '3D' || patternUpper.includes('3D')) {
-                type = '3D'
-              } else if (patternUpper === '2D' || patternUpper.includes('2D')) {
-                type = '2D'
-              } else {
-                // Default to 2D if unknown
-                type = '2D'
-              }
-            }
-            
-            // Try to get dimensions from the dimensions field first
-            if (dims.x !== undefined || dims.width !== undefined || dims.rows !== undefined || dims.estimated_elements !== undefined) {
-              // If we have estimated_elements, try to infer dimensions
-              if (dims.estimated_elements !== undefined && dims.x === undefined && dims.width === undefined) {
-                // For 1D arrays, use x dimension
-                if (type === '1D') {
-                  dimensions = { x: dims.estimated_elements, y: 1 }
-                } else if (type === '2D') {
-                  // For 2D, try to infer square dimensions
-                  const sqrt = Math.sqrt(dims.estimated_elements)
-                  if (Number.isInteger(sqrt)) {
-                    dimensions = { x: sqrt, y: sqrt }
-                  } else {
-                    // Fallback: use estimated_elements as x, 1 as y
-                    dimensions = { x: dims.estimated_elements, y: 1 }
-                  }
-                } else if (type === '3D') {
-                  // For 3D, try to infer cubic dimensions
-                  const cubeRoot = Math.cbrt(dims.estimated_elements)
-                  if (Number.isInteger(cubeRoot)) {
-                    dimensions = { x: cubeRoot, y: cubeRoot, z: cubeRoot }
-                  } else {
-                    dimensions = { x: dims.estimated_elements, y: 1, z: 1 }
-                  }
-                }
-              } else {
-                // We have explicit dimensions - prefer x, y, z format, fallback to width/height
-                if (type === '1D') {
-                  // For 1D, use x dimension
-                  if (dims.x !== undefined) {
-                    dimensions = { x: dims.x, y: 1 }
-                  } else if (dims.width !== undefined) {
-                    dimensions = { x: dims.width, y: 1 }
-                  } else {
-                    dimensions = undefined
-                  }
-                } else if (type === '2D') {
-                  // For 2D, use x and y
-                  const x = dims.x !== undefined ? dims.x : (dims.width !== undefined ? dims.width : (dims.rows !== undefined ? dims.rows : 0))
-                  const y = dims.y !== undefined ? dims.y : (dims.height !== undefined ? dims.height : (dims.cols !== undefined ? dims.cols : 0))
-                  if (x > 0 && y > 0) {
-                    dimensions = { x, y }
-                  }
-                } else if (type === '3D') {
-                  // For 3D, use x, y, z
-                  const x = dims.x !== undefined ? dims.x : (dims.width !== undefined ? dims.width : (dims.rows !== undefined ? dims.rows : 0))
-                  const y = dims.y !== undefined ? dims.y : (dims.height !== undefined ? dims.height : (dims.cols !== undefined ? dims.cols : 0))
-                  const z = dims.z !== undefined ? dims.z : (dims.depth !== undefined ? dims.depth : 1)
-                  if (x > 0 && y > 0 && z > 0) {
-                    dimensions = { x, y, z }
-                  }
-                }
-              }
-            } else if (features.x_size !== undefined || features.width !== undefined) {
-              // Fallback to features if dimensions not available
-              if (type === '1D') {
-                // For 1D, use x dimension
-                const x = features.x_size || features.width || 0
-                if (x > 0) {
-                  dimensions = { x, y: 1 }
-                }
-              } else if (type === '2D') {
-                const x = features.x_size || features.width || 0
-                const y = features.y_size || features.height || 0
-                if (x > 0 && y > 0) {
-                  dimensions = { x, y }
-                }
-              } else {
-                const x = features.x_size || features.width || 0
-                const y = features.y_size || features.height || 0
-                const z = features.z_size || features.depth || 1
-                if (x > 0 && y > 0 && z > 0) {
-                  dimensions = { x, y, z }
-                }
-              }
-            }
-            
-            // Final fallback: if dimensions still not set but we have width/height in dims, use them
-            if (!dimensions && (dims.width !== undefined || dims.height !== undefined)) {
-              const x = dims.width || dims.x || 1
-              const y = dims.height || dims.y || 1
-              if (x > 0 && y > 0) {
-                dimensions = { x, y }
-                // Update type based on dimensions if not already set correctly
-                if (type === '1D' && y > 1) {
-                  type = '2D'
-                }
-              }
-            }
-            
-            // Extract data type and element size from dimensions or features
-            const elementSize = dims.element_size || 2 // Default to 2 bytes (uint16)
-            const dataType = c.data_type || 'u16le' // Default to uint16 little endian
-            
-            return {
-              id: c.candidate_id,
-              type,
-              offset: c.offset,
-              confidence: Math.round(c.confidence * 100), // Convert to percentage
-              size: c.size,
-              dimensions,
-              dataType,
-              elementSize,
-            }
-          }
-          
-          const candidates = scanData.candidates.map(convertCandidate)
+          const candidates = scanData.candidates.map(convertCandidateResponse)
           setCandidates(candidates)
         } catch (error) {
           console.warn('Failed to load scan results:', error)
@@ -877,17 +791,147 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
 /**
  * Scans Tab Content
  */
-function ScansTab() {
+function ScansTab({ project, onOpenFile }: { project: Project; onOpenFile?: (fileId: string) => void }) {
+  const [scans, setScans] = useState<ProjectScanItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        setLoading(true)
+        const res = await getProjectScans(project.project_id)
+        if (!cancelled) setScans(res.scans)
+      } catch (e) {
+        if (!cancelled) {
+          console.error('Failed to load project scans:', e)
+          toast.error('Failed to load scans', { description: e instanceof Error ? e.message : 'Unknown error' })
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [project.project_id])
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Scans</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (scans.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Scans</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">
+            No scans yet. Upload a file and run a scan from the Analysis page to see results here.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Scans</CardTitle>
+        <CardTitle>Scans ({scans.length})</CardTitle>
+        <CardDescription>Scan history for all files in this project</CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-muted-foreground">
-          Scan history and results will be displayed here in a future story.
-        </p>
-        {/* TODO: Implement scans table in future story */}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>File</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Candidates</TableHead>
+              <TableHead>Duration</TableHead>
+              <TableHead>Completed</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {scans.map((scan) => (
+              <TableRow key={scan.scan_id}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <FileCode className="w-4 h-4 text-muted-foreground" />
+                    {scan.filename}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {scan.status === 'completed' ? (
+                    <Badge variant="default" className="flex items-center gap-1 w-fit">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Completed
+                    </Badge>
+                  ) : scan.status === 'failed' ? (
+                    <Badge variant="destructive" className="w-fit">
+                      Failed
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">{scan.status}</Badge>
+                  )}
+                </TableCell>
+                <TableCell>{scan.candidates_found}</TableCell>
+                <TableCell>
+                  {scan.processing_time_ms != null ? `${(scan.processing_time_ms / 1000).toFixed(2)}s` : '—'}
+                </TableCell>
+                <TableCell>
+                  {scan.completed_at ? formatRelativeTime(scan.completed_at) : '—'}
+                </TableCell>
+                <TableCell className="text-right">
+                  {scan.status === 'completed' && onOpenFile && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onOpenFile(scan.file_id)}
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      Open
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Description Tab Content
+ */
+function DescriptionTab({ project }: { project: Project }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Description</CardTitle>
+        <CardDescription>Project description (visible when published to the Library)</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {project.description ? (
+          <p className="text-muted-foreground whitespace-pre-wrap">{project.description}</p>
+        ) : (
+          <p className="text-muted-foreground italic">No description yet. Edit the project to add one.</p>
+        )}
       </CardContent>
     </Card>
   )
@@ -906,7 +950,6 @@ function SettingsTab() {
         <p className="text-muted-foreground">
           Project settings and configuration options will be available here.
         </p>
-        {/* TODO: Implement settings form in future story */}
       </CardContent>
     </Card>
   )
@@ -964,10 +1007,47 @@ function ProjectDetailSkeleton() {
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const { setFileData, setCandidates, setScanId } = useAnalysisStore()
   const { projects, isLoading, fetchProjects } = useProjectStore()
   const [project, setProject] = useState<Project | null>(null)
   const [projectLoading, setProjectLoading] = useState(true)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [openingFileId, setOpeningFileId] = useState<string | null>(null)
+
+  const handleOpenFileById = useCallback(async (fileId: string) => {
+    if (!project) return
+    try {
+      setOpeningFileId(fileId)
+      const { files } = await getProjectFiles(project.project_id)
+      const file = files.find((f) => f.file_id === fileId)
+      if (!file) {
+        toast.error('File not found')
+        return
+      }
+      const fileData = await downloadFile(file.file_id)
+      const uint8Array = new Uint8Array(fileData)
+      setFileData(uint8Array, file.filename, file.file_id)
+      if (file.has_scan && file.latest_scan_id) {
+        try {
+          const scanData = await getScanResults(file.latest_scan_id)
+          setScanId(file.latest_scan_id)
+          setCandidates(scanData.candidates.map(convertCandidateResponse))
+        } catch {
+          setCandidates([])
+          setScanId(null)
+        }
+      } else {
+        setCandidates([])
+        setScanId(null)
+      }
+      navigate('/analysis')
+    } catch (error) {
+      console.error('Failed to open file:', error)
+      toast.error('Failed to open file', { description: error instanceof Error ? error.message : 'Unknown error' })
+    } finally {
+      setOpeningFileId(null)
+    }
+  }, [project, navigate, setFileData, setCandidates, setScanId])
 
   const handleProjectUpdate = async () => {
     // Refresh project list to get updated project data
@@ -1071,6 +1151,10 @@ export function ProjectDetail() {
               <Activity className="w-4 h-4" />
               Scans
             </TabsTrigger>
+            <TabsTrigger value="description" className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Description
+            </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="w-4 h-4" />
               Settings
@@ -1086,7 +1170,11 @@ export function ProjectDetail() {
           </TabsContent>
 
           <TabsContent value="scans">
-            <ScansTab />
+            <ScansTab project={project} onOpenFile={handleOpenFileById} />
+          </TabsContent>
+
+          <TabsContent value="description">
+            <DescriptionTab project={project} />
           </TabsContent>
 
           <TabsContent value="settings">

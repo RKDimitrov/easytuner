@@ -388,6 +388,48 @@ class ScanService:
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_scan_job_for_library(
+        self,
+        db: AsyncSession,
+        scan_id: UUID
+    ) -> Optional[ScanJob]:
+        """
+        Get a scan job by ID for library (public) access.
+        Access allowed only if the scan's file belongs to a published project.
+        """
+        result = await db.execute(
+            select(ScanJob)
+            .join(ScanJob.file)
+            .join(FirmwareFile.project)
+            .where(
+                ScanJob.scan_id == scan_id,
+                Project.deleted_at.is_(None),
+                Project.is_private.is_(False),
+                Project.published_at.isnot(None)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_scan_candidates_for_library(
+        self,
+        db: AsyncSession,
+        scan_id: UUID,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[Candidate]:
+        """Get candidates for a scan that belongs to a published project."""
+        scan = await self.get_scan_job_for_library(db, scan_id)
+        if not scan:
+            return []
+        result = await db.execute(
+            select(Candidate)
+            .where(Candidate.scan_id == scan_id)
+            .order_by(Candidate.confidence.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
     
     async def get_scan_candidates(
         self,

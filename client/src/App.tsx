@@ -5,6 +5,8 @@ import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { Dashboard } from './pages/Dashboard'
 import { Library } from './pages/Library'
+import { LibraryProjectView } from './pages/LibraryProjectView'
+import { LibraryFileView } from './pages/LibraryFileView'
 import { ProjectDashboard } from './pages/ProjectDashboard'
 import { ProjectDetail } from './pages/ProjectDetail'
 import { Settings } from './pages/Settings'
@@ -95,6 +97,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <Library />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/library/:projectId"
+            element={
+              <ProtectedRoute>
+                <LibraryProjectView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/library/:projectId/file/:fileId"
+            element={
+              <ProtectedRoute>
+                <LibraryFileView />
               </ProtectedRoute>
             }
           />

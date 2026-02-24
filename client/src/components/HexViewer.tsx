@@ -158,7 +158,10 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
           <div
             ref={parentRef}
             className="flex-1 overflow-auto bg-card min-h-0"
-            style={{ contain: 'strict' }}
+            style={{
+              contain: 'strict',
+              ...(displayData?.length ? { minHeight: '60vh' } : {}),
+            }}
           >
           <div
             style={{

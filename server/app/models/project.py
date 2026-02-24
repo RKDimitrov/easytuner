@@ -78,6 +78,12 @@ class Project(Base, TimestampMixin):
         doc="Whether the project is private",
     )
 
+    # Library publish: when set, project appears in /library for others to view
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        doc="When the project was published to the library (NULL = not published)",
+    )
+
     # Soft delete
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -110,6 +116,7 @@ class Project(Base, TimestampMixin):
         Index("idx_projects_owner_user_id", "owner_user_id"),
         Index("idx_projects_created_at", "created_at"),
         Index("idx_projects_deleted_at", "deleted_at"),
+        Index("idx_projects_published_at", "published_at"),
         # GIN index for full-text search on project names using pg_trgm
         # Note: Requires CREATE EXTENSION pg_trgm; in database
         Index(
