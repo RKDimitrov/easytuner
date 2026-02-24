@@ -14,11 +14,14 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { toast } from 'sonner'
+import * as authService from '../../services/authService'
+import { useAuthStore } from '../../store/authStore'
+import type { ApiError } from '../../types/auth'
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: z.string()
-    .min(8, 'Password must be at least 8 characters')
+    .min(12, 'Password must be at least 12 characters')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number')
@@ -48,25 +51,28 @@ export function SecurityTab() {
 
   const onSubmit = async (data: PasswordFormData) => {
     setIsChangingPassword(true)
+    const accessToken = useAuthStore.getState().accessToken
+    if (!accessToken) {
+      toast.error('Not signed in', { description: 'Please sign in to change your password.' })
+      setIsChangingPassword(false)
+      return
+    }
     try {
-      // TODO: Replace with actual API call when backend is ready
-      // await authService.changePassword(data)
-      
-      // For now, simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      console.log('Password change requested:', data)
-      
+      await authService.changePassword(accessToken, {
+        current_password: data.currentPassword,
+        new_password: data.newPassword,
+      })
       toast.success('Password changed successfully', {
         description: 'Your password has been updated.',
       })
-      
-      // Reset form
       reset()
-    } catch (error) {
-      toast.error('Failed to change password', {
-        description: 'Please check your current password and try again.',
-      })
+    } catch (err) {
+      const apiError = err as ApiError
+      const detail =
+        typeof apiError.response?.data?.detail === 'string'
+          ? apiError.response.data.detail
+          : 'Please check your current password and try again.'
+      toast.error('Failed to change password', { description: detail })
     } finally {
       setIsChangingPassword(false)
     }
@@ -148,7 +154,7 @@ export function SecurityTab() {
               <div className="text-xs text-muted-foreground">
                 <p>Password requirements:</p>
                 <ul className="list-disc list-inside mt-1 space-y-1">
-                  <li>At least 8 characters</li>
+                  <li>At least 12 characters</li>
                   <li>One uppercase letter</li>
                   <li>One lowercase letter</li>
                   <li>One number</li>

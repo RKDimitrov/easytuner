@@ -2,13 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import MessageResponse, TokenRefresh, TokenResponse, UserLogin, UserRegistration, UserResponse
+from app.schemas.auth import MessageResponse, PasswordChange, TokenRefresh, TokenResponse, UserLogin, UserRegistration, UserResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(
@@ -146,6 +146,36 @@ async def refresh_token(
         refresh_token=token_data.refresh_token,
         ip_address=ip_address,
         user_agent=user_agent,
+    )
+
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Change password",
+    description="Change the authenticated user's password",
+)
+async def change_password(
+    body: PasswordChange,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Change the current user's password.
+
+    Args:
+        body: Current and new password
+        current_user: Authenticated user from dependency
+        db: Database session
+
+    Raises:
+        401: Current password is incorrect
+        400: New password fails strength validation (min 12 chars, etc.)
+    """
+    auth_service = AuthService(db)
+    await auth_service.change_password(
+        user_id=current_user.user_id,
+        current_password=body.current_password,
+        new_password=body.new_password,
     )
 
 

@@ -268,6 +268,51 @@ class AuthService:
         )
         return result.scalar_one_or_none()
 
+    async def change_password(
+        self,
+        user_id: UUID,
+        current_password: str,
+        new_password: str,
+    ) -> None:
+        """Change a user's password.
+
+        Args:
+            user_id: User's unique identifier
+            current_password: User's current password
+            new_password: New password to set
+
+        Raises:
+            HTTPException:
+                - 401: Current password is incorrect
+                - 400: New password fails strength validation
+        """
+        user = await self.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        if not verify_password(current_password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Current password is incorrect",
+            )
+        is_valid, error_message = validate_password_strength(new_password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_message,
+            )
+        user.password_hash = hash_password(new_password)
+        try:
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update password",
+            ) from e
+
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email.
 

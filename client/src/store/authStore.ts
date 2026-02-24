@@ -29,6 +29,8 @@ interface AuthState {
   setTokens: (accessToken: string, refreshToken: string) => void
   reset: () => void
   handleSessionExpired: () => void
+  /** Revalidate session on app load when we have persisted tokens */
+  initializeAuth: () => Promise<void>
 }
 
 const initialState = {
@@ -218,6 +220,32 @@ export const useAuthStore = create<AuthState>()(
             error: 'Session expired. Please login again.',
             sessionExpired: true,
           })
+        },
+
+        /**
+         * Revalidate session on app load. Call once after persist has rehydrated.
+         * If we have persisted tokens, validates them (refresh + fetch user).
+         * On failure clears auth so ProtectedRoute redirects to login.
+         */
+        initializeAuth: async () => {
+          const { accessToken, refreshToken } = get()
+          if (!accessToken && !refreshToken) {
+            set({ isAuthenticated: false, isLoading: false })
+            return
+          }
+          set({ isLoading: true })
+          try {
+            if (refreshToken) {
+              await get().refreshTokens()
+            }
+            await get().fetchCurrentUser()
+            set({ isLoading: false })
+          } catch {
+            set({
+              ...initialState,
+              isLoading: false,
+            })
+          }
         },
       }),
       {

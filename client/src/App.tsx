@@ -16,15 +16,31 @@ import { useAuthStore } from './store/authStore'
 import { Button } from './components/ui/button'
 import { AlertCircle } from 'lucide-react'
 
+/** Redirects / to /dashboard when authenticated, /login when not (after auth init). */
+function RootRedirect() {
+  const { isAuthenticated, isLoading } = useAuthStore()
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+  return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />
+}
+
 function App() {
   const navigate = useNavigate()
   const { sessionExpired, logout, isAuthenticated } = useAuthStore()
 
-  // Setup axios interceptor for automatic token handling
+  // Setup axios interceptor and revalidate session on load (so expired tokens send user to login)
   useEffect(() => {
     setupAuthInterceptor()
-    // Initialize settings (theme, etc.)
     initializeSettings()
+    useAuthStore.getState().initializeAuth()
   }, [])
 
   // Redirect to login when session expires
@@ -49,7 +65,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<RootRedirect />} />
           <Route
             path="/dashboard"
             element={

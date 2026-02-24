@@ -4,97 +4,85 @@
 
 @layer base {
   :root {
-    /* Light mode colors - Clean & Modern */
-    --background: 0 0% 100%;
-    --foreground: 25 15% 15%;
+    /* Light mode - Soft off-white, amber accent (easy on the eyes) */
+    --background: 0 0% 98%;
+    --foreground: 0 0% 14%;
     
     --card: 0 0% 100%;
-    --card-foreground: 25 15% 15%;
+    --card-foreground: 0 0% 14%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 25 15% 15%;
+    --popover-foreground: 0 0% 14%;
     
-    /* Vibrant Red Primary */
-    --primary: 0 75% 50%;
+    /* Amber primary - matches dark theme */
+    --primary: 38 92% 45%;
     --primary-foreground: 0 0% 100%;
     
-    /* Warm Brown Secondary */
-    --secondary: 25 30% 94%;
-    --secondary-foreground: 25 15% 15%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 14%;
     
-    /* Subtle Brown Muted */
-    --muted: 25 20% 96%;
-    --muted-foreground: 25 10% 45%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 42%;
     
-    /* Soft Brown-Red Accent */
-    --accent: 15 50% 95%;
-    --accent-foreground: 0 75% 50%;
+    --accent: 38 40% 93%;
+    --accent-foreground: 38 70% 28%;
     
-    /* Deep Red Destructive */
     --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 100%;
     
-    /* Warm Brown Border */
-    --border: 25 20% 88%;
-    --input: 25 20% 88%;
-    --ring: 0 75% 50%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 38 92% 45%;
     
     --radius: 0.5rem;
     
-    /* Custom colors - Brown-Red theme */
-    --warning: 20 75% 50%;
+    --warning: 38 92% 45%;
     --warning-foreground: 0 0% 100%;
     
-    --success: 142 70% 45%;
+    --success: 142 70% 40%;
     --success-foreground: 0 0% 100%;
     
     --data: 200 90% 35%;
   }
 
   .dark {
-    /* Dark mode colors - Rich Brown with Red Accents */
-    --background: 25 20% 12%;
+    /* Dark mode - Neutral charcoal with amber accent (no Cursor blue) */
+    --background: 0 0% 9%;
     --foreground: 0 0% 95%;
     
-    --card: 25 18% 16%;
+    --card: 0 0% 12%;
     --card-foreground: 0 0% 95%;
     
-    --popover: 25 18% 16%;
+    --popover: 0 0% 12%;
     --popover-foreground: 0 0% 95%;
     
-    /* Vibrant Red Primary - pops on brown */
-    --primary: 0 85% 58%;
-    --primary-foreground: 0 0% 98%;
+    /* Amber primary - warm, high contrast on dark */
+    --primary: 38 92% 50%;
+    --primary-foreground: 0 0% 100%;
     
-    /* Rich Brown Secondary */
-    --secondary: 25 25% 22%;
+    --secondary: 0 0% 16%;
     --secondary-foreground: 0 0% 95%;
     
-    /* Brown Muted */
-    --muted: 25 20% 18%;
-    --muted-foreground: 30 15% 65%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 58%;
     
-    /* Brown-Red Accent - complements brown */
-    --accent: 15 60% 35%;
+    --accent: 38 45% 22%;
     --accent-foreground: 0 0% 95%;
     
-    /* Bright Red Destructive */
-    --destructive: 0 75% 55%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
     
-    /* Brown Border */
-    --border: 25 20% 22%;
-    --input: 25 20% 22%;
-    --ring: 0 85% 58%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 38 92% 50%;
     
-    /* Custom colors for dark mode - Brown-Red theme */
-    --warning: 20 75% 55%;
-    --warning-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
     
-    --success: 142 75% 52%;
-    --success-foreground: 0 0% 98%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
     
-    --data: 180 95% 65%;
+    --data: 187 85% 53%;
   }
 }
 
