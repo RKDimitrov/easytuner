@@ -2,9 +2,10 @@
 Scan service for processing firmware files and detecting patterns.
 Uses the ecumap module for accurate map detection.
 """
+import asyncio
 import logging
-import sys
 import io
+import tempfile
 from contextlib import redirect_stderr
 from datetime import datetime
 from pathlib import Path
@@ -183,71 +184,55 @@ class ScanService:
             
             # Extract config
             config = scan_job.scan_config or {}
-            # Use ecumap defaults - window_size in ecumap is for entropy calculation (larger than old system)
-            # If old small window_size is provided, use ecumap default instead
             old_window_size = config.get('window_size', 1024)
-            window_size = 1024 if old_window_size < 512 else old_window_size  # Use ecumap default if too small
+            window_size = 1024 if old_window_size < 512 else old_window_size
             entropy_threshold = config.get('entropy_threshold', 7.2)
             min_block_size = config.get('min_block_size', 256)
-            top_k = config.get('top_k', 20)  # Number of top candidates to return
+            top_k = config.get('top_k', 20)
             min_confidence = float(config.get('min_confidence', 0.5))
             
-            # Create segmentation configuration
             seg_config = SegmentationConfig(
                 window_size=window_size,
-                step_size=256,  # Fixed step size
+                step_size=256,
                 entropy_threshold=entropy_threshold,
                 min_block_size=min_block_size,
-                ascii_threshold=0.3  # Fixed ASCII threshold
+                ascii_threshold=0.3
             )
             
-            # Create a temporary file path for find_maps_real
-            # Since find_maps_real expects a Path, we'll write to a temp file
-            import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.bin') as tmp_file:
-                tmp_file.write(raw_bytes)
-                tmp_file_path = Path(tmp_file.name)
-            
-            try:
-                # Capture stderr output for progress logging
-                stderr_capture = io.StringIO()
-                
-                # Run the ecumap detection algorithm
-                logger.info(f"Starting map detection using ecumap algorithm ({len(raw_bytes)} bytes)")
-                logger.info(f"Configuration: window_size={window_size}, entropy_threshold={entropy_threshold}, min_block_size={min_block_size}")
-                
-                # Redirect stderr to capture progress messages
-                with redirect_stderr(stderr_capture):
-                    # Get more candidates than requested for deduplication
-                    candidates_blocks = find_maps_real(tmp_file_path, top_k * 3, seg_config)
-                
-                # Log captured progress messages
-                stderr_output = stderr_capture.getvalue()
-                if stderr_output:
-                    for line in stderr_output.strip().split('\n'):
-                        if line.strip():
-                            logger.info(f"ECU Map Detection: {line}")
-                
-                logger.info(f"Found {len(candidates_blocks)} candidates before deduplication")
-                
-                # Deduplicate, rank, and filter outliers (same as find_maps.py main)
-                deduplicated = deduplicate_by_overlap(candidates_blocks)
-                final_ranked = rank_candidates(deduplicated)
-                
-                # Filter statistical outliers
-                filtered_candidates = filter_statistical_outliers(final_ranked, z_threshold=1.5)
-                
-                # Select top K
-                top_candidates = filtered_candidates[:top_k]
-                
-                logger.info(f"Processing {len(top_candidates)} candidates after ranking and filtering")
-                
-            finally:
-                # Clean up temp file
+            logger.info(
+                f"Starting map detection using ecumap algorithm ({len(raw_bytes)} bytes), "
+                f"window_size={window_size}, entropy_threshold={entropy_threshold}, "
+                f"min_block_size={min_block_size}"
+            )
+
+            def _run_detection() -> list:
+                """CPU-bound detection work — runs in a thread pool."""
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.bin') as tmp_file:
+                    tmp_file.write(raw_bytes)
+                    tmp_file_path = Path(tmp_file.name)
                 try:
-                    tmp_file_path.unlink()
-                except Exception as e:
-                    logger.warning(f"Failed to delete temp file {tmp_file_path}: {e}")
+                    stderr_capture = io.StringIO()
+                    with redirect_stderr(stderr_capture):
+                        candidates_blocks = find_maps_real(tmp_file_path, top_k * 3, seg_config)
+                    stderr_output = stderr_capture.getvalue()
+                    if stderr_output:
+                        for line in stderr_output.strip().split('\n'):
+                            if line.strip():
+                                logger.info(f"ECU Map Detection: {line}")
+                    deduplicated = deduplicate_by_overlap(candidates_blocks)
+                    final_ranked = rank_candidates(deduplicated)
+                    filtered = filter_statistical_outliers(final_ranked, z_threshold=1.5)
+                    return filtered[:top_k]
+                finally:
+                    try:
+                        tmp_file_path.unlink()
+                    except Exception as cleanup_err:
+                        logger.warning(f"Failed to delete temp file {tmp_file_path}: {cleanup_err}")
+
+            loop = asyncio.get_event_loop()
+            top_candidates = await loop.run_in_executor(None, _run_detection)
+
+            logger.info(f"Processing {len(top_candidates)} candidates after ranking and filtering")
             
             # Convert ecumap candidates to database Candidate models
             candidates_created = 0
