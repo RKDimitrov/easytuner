@@ -17,6 +17,7 @@ export const mockProjects: Project[] = [
     name: 'ECU Firmware Analysis',
     description: 'Analysis of automotive ECU firmware for security vulnerabilities',
     is_private: false,
+    published_at: null,
     created_at: '2024-01-15T10:00:00Z',
     updated_at: '2024-01-20T15:30:00Z',
     file_count: 5
@@ -27,6 +28,7 @@ export const mockProjects: Project[] = [
     name: 'Private Research',
     description: 'Confidential research project',
     is_private: true,
+    published_at: null,
     created_at: '2024-01-10T09:00:00Z',
     updated_at: '2024-01-18T12:00:00Z',
     file_count: 12
@@ -37,6 +39,7 @@ export const mockProjects: Project[] = [
     name: 'Test Project',
     description: 'Empty test project',
     is_private: false,
+    published_at: null,
     created_at: '2024-01-25T14:00:00Z',
     updated_at: '2024-01-25T14:00:00Z',
     file_count: 0
@@ -47,6 +50,7 @@ export const mockProjects: Project[] = [
     name: 'Large Dataset Analysis',
     description: 'Analysis of large firmware dataset with multiple files',
     is_private: true,
+    published_at: null,
     created_at: '2024-01-05T08:00:00Z',
     updated_at: '2024-01-22T16:45:00Z',
     file_count: 25
@@ -57,6 +61,7 @@ export const mockProjects: Project[] = [
     name: 'Automotive Security',
     description: 'Security analysis of automotive systems',
     is_private: false,
+    published_at: null,
     created_at: '2024-01-12T11:30:00Z',
     updated_at: '2024-01-19T09:15:00Z',
     file_count: 8

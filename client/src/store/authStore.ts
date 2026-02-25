@@ -338,7 +338,6 @@ export function setupAuthInterceptor() {
             .then(() => {
               const { accessToken } = useAuthStore.getState()
               processQueue(null, accessToken)
-              return accessToken
             })
             .catch((refreshError) => {
               // Refresh failed - immediately logout and redirect
@@ -361,10 +360,10 @@ export function setupAuthInterceptor() {
             })
 
           try {
-            const token = await refreshPromise
-            
+            await refreshPromise
+            const { accessToken } = useAuthStore.getState()
             // Retry original request with new token
-            originalRequest.headers.Authorization = `Bearer ${token}`
+            originalRequest.headers.Authorization = `Bearer ${accessToken}`
             return axios(originalRequest)
           } catch (refreshError) {
             // Already handled in refreshPromise catch

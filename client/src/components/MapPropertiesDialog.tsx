@@ -95,7 +95,7 @@ const defaultForm: MapPropertiesForm = {
   comment: '',
 }
 
-function candidateToForm(c: MapCandidate | null, fileSize: number): MapPropertiesForm {
+function candidateToForm(c: MapCandidate | null, _fileSize: number): MapPropertiesForm {
   if (!c) return { ...defaultForm, valueRangeMax: 65535 }
   const dims = c.dimensions
   const cols = dims?.x ?? 16

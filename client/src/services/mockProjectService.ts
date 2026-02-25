@@ -116,6 +116,7 @@ export async function createProject(data: CreateProjectData): Promise<Project> {
       name: data.name,
       description: data.description || null,
       is_private: data.is_private || false,
+      published_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       file_count: 0
@@ -227,6 +228,7 @@ export function initializeSampleProjects(): void {
         name: 'ECU Firmware Analysis',
         description: 'Analysis of automotive ECU firmware for security vulnerabilities',
         is_private: false,
+        published_at: null,
         created_at: '2024-01-15T10:00:00Z',
         updated_at: '2024-01-20T15:30:00Z',
         file_count: 3
@@ -237,6 +239,7 @@ export function initializeSampleProjects(): void {
         name: 'Private Research',
         description: 'Confidential research project',
         is_private: true,
+        published_at: null,
         created_at: '2024-01-10T09:00:00Z',
         updated_at: '2024-01-18T12:00:00Z',
         file_count: 7
@@ -247,6 +250,7 @@ export function initializeSampleProjects(): void {
         name: 'Test Project',
         description: 'Empty test project for demonstration',
         is_private: false,
+        published_at: null,
         created_at: '2024-01-25T14:00:00Z',
         updated_at: '2024-01-25T14:00:00Z',
         file_count: 0

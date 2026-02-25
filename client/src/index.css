@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    /* Light mode - Soft off-white, amber accent (easy on the eyes) */
+    /* Light mode - Soft off-white, #de3f41 accent */
     --background: 0 0% 98%;
     --foreground: 0 0% 14%;
     
@@ -14,8 +14,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 14%;
     
-    /* Amber primary - matches dark theme */
-    --primary: 38 92% 45%;
+    /* #de3f41 primary */
+    --primary: 0 71% 56%;
     --primary-foreground: 0 0% 100%;
     
     --secondary: 0 0% 94%;
@@ -24,19 +24,19 @@
     --muted: 0 0% 95%;
     --muted-foreground: 0 0% 42%;
     
-    --accent: 38 40% 93%;
-    --accent-foreground: 38 70% 28%;
+    --accent: 0 50% 94%;
+    --accent-foreground: 0 71% 30%;
     
     --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 100%;
     
     --border: 0 0% 90%;
     --input: 0 0% 90%;
-    --ring: 38 92% 45%;
+    --ring: 0 71% 56%;
     
     --radius: 0.5rem;
     
-    --warning: 38 92% 45%;
+    --warning: 38 92% 36%;
     --warning-foreground: 0 0% 100%;
     
     --success: 142 70% 40%;
@@ -46,7 +46,7 @@
   }
 
   .dark {
-    /* Dark mode - Neutral charcoal with amber accent (no Cursor blue) */
+    /* Dark mode - Neutral charcoal with #de3f41 accent */
     --background: 0 0% 9%;
     --foreground: 0 0% 95%;
     
@@ -56,8 +56,8 @@
     --popover: 0 0% 12%;
     --popover-foreground: 0 0% 95%;
     
-    /* Amber primary - warm, high contrast on dark */
-    --primary: 38 92% 50%;
+    /* #de3f41 primary */
+    --primary: 0 71% 58%;
     --primary-foreground: 0 0% 100%;
     
     --secondary: 0 0% 16%;
@@ -66,7 +66,7 @@
     --muted: 0 0% 18%;
     --muted-foreground: 0 0% 58%;
     
-    --accent: 38 45% 22%;
+    --accent: 0 45% 24%;
     --accent-foreground: 0 0% 95%;
     
     --destructive: 0 72% 51%;
@@ -74,9 +74,9 @@
     
     --border: 0 0% 20%;
     --input: 0 0% 20%;
-    --ring: 38 92% 50%;
+    --ring: 0 71% 58%;
     
-    --warning: 38 92% 50%;
+    --warning: 38 92% 40%;
     --warning-foreground: 0 0% 100%;
     
     --success: 142 71% 45%;

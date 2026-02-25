@@ -1012,7 +1012,7 @@ export function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null)
   const [projectLoading, setProjectLoading] = useState(true)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
-  const [openingFileId, setOpeningFileId] = useState<string | null>(null)
+  const [, setOpeningFileId] = useState<string | null>(null)
 
   const handleOpenFileById = useCallback(async (fileId: string) => {
     if (!project) return

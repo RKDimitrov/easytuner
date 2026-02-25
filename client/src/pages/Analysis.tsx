@@ -131,7 +131,7 @@ export function Analysis() {
     }
 
     // Block browser back/forward navigation
-    const handlePopState = (e: PopStateEvent) => {
+    const handlePopState = (_e: PopStateEvent) => {
       if (isScanning) {
         const shouldProceed = window.confirm(
           'A scan is currently in progress. Navigating away will cancel the scan. Do you want to continue?'
