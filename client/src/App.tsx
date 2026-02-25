@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import { Analysis } from './pages/Analysis'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { Dashboard } from './pages/Dashboard'
+import { Landing } from './pages/Landing'
 import { Library } from './pages/Library'
 import { LibraryProjectView } from './pages/LibraryProjectView'
 import { LibraryFileView } from './pages/LibraryFileView'
@@ -17,22 +18,6 @@ import { initializeSettings } from './store/settingsStore'
 import { useAuthStore } from './store/authStore'
 import { Button } from './components/ui/button'
 import { AlertCircle } from 'lucide-react'
-
-/** Redirects / to /dashboard when authenticated, /login when not (after auth init). */
-function RootRedirect() {
-  const { isAuthenticated, isLoading } = useAuthStore()
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-  return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />
-}
 
 function App() {
   const navigate = useNavigate()
@@ -65,9 +50,9 @@ function App() {
     <div className="relative min-h-screen">
       <div className={sessionExpired ? 'pointer-events-none blur-sm' : ''}>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<RootRedirect />} />
           <Route
             path="/dashboard"
             element={
