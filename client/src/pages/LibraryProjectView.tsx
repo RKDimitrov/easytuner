@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Header } from '../components/Header'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -30,6 +31,7 @@ function formatRelativeTime(timestamp: string): string {
 export function LibraryProjectView() {
   const { projectId } = useParams<{ projectId: string }>()
   const [project, setProject] = useState<LibraryProjectDetail | null>(null)
+  usePageTitle(project ? `Library - ${project.name}` : 'Library')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

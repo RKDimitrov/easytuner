@@ -5,6 +5,7 @@
  */
 
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { 
   User, 
   Palette, 
@@ -50,6 +51,7 @@ const settingsTabs = [
 ]
 
 export function Settings() {
+  usePageTitle('Settings')
   const location = useLocation()
   const currentPath = location.pathname
 

@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -43,6 +44,7 @@ const registerSchema = z
 type RegisterFormData = z.infer<typeof registerSchema>
 
 export function Register() {
+  usePageTitle('Create Account')
   const navigate = useNavigate()
   const { register: registerUser, isAuthenticated, isLoading } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)

@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -26,6 +27,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>
 
 export function Login() {
+  usePageTitle('Sign In')
   const navigate = useNavigate()
   const location = useLocation()
   const { login, isAuthenticated, isLoading } = useAuthStore()

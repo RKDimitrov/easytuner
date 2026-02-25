@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Header } from '../components/Header'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -27,6 +28,7 @@ function formatRelativeTime(timestamp: string): string {
 }
 
 export function Library() {
+  usePageTitle('Library')
   const [projects, setProjects] = useState<LibraryProjectSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')

@@ -9,6 +9,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileCode, Calendar, Lock, Globe, Upload, Settings, Activity, Eye, CheckCircle2, XCircle, Loader2, Trash2, Plus, Upload as UploadIcon, AlertCircle, BookMarked, FileText } from 'lucide-react'
 import { Header } from '../components/Header'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '../components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -1010,6 +1011,7 @@ export function ProjectDetail() {
   const { setFileData, setCandidates, setScanId } = useAnalysisStore()
   const { projects, isLoading, fetchProjects } = useProjectStore()
   const [project, setProject] = useState<Project | null>(null)
+  usePageTitle(project ? project.name : 'Project')
   const [projectLoading, setProjectLoading] = useState(true)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [, setOpeningFileId] = useState<string | null>(null)

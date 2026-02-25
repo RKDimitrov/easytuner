@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { useAnalysisStore, MapCandidate } from '../store/analysisStore'
 import { useEditStore } from '../store/editStore'
 import { formatBytes, formatHexOffset } from '../lib/utils'
@@ -40,6 +41,7 @@ import {
 } from 'lucide-react'
 
 export function Analysis() {
+  usePageTitle('Analysis')
   const navigate = useNavigate()
   const isMobile = useIsMobile()
   const {

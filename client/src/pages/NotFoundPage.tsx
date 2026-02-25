@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { AlertCircle, Home } from 'lucide-react'
 
 export function NotFoundPage() {
+  usePageTitle('Not Found')
   const navigate = useNavigate()
 
   return (

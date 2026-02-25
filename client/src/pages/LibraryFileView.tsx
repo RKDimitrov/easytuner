@@ -6,6 +6,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Header } from '../components/Header'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
@@ -25,6 +26,7 @@ export function LibraryFileView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string>('')
+  usePageTitle(fileName ? `Library - ${fileName}` : 'Library')
 
   const {
     setFileData,

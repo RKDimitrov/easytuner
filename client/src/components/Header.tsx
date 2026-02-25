@@ -13,6 +13,7 @@ import {
   Settings 
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+import etlogo from '../etlogo.png'
 
 export function Header() {
   const location = useLocation()
@@ -46,9 +47,7 @@ export function Header() {
         {/* Logo and App Name */}
         <div className="flex items-center gap-2 md:gap-6 min-w-0">
           <Link to="/dashboard" className="flex items-center space-x-2 shrink-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <span className="text-lg font-bold">E</span>
-            </div>
+            <img src={etlogo} alt="EasyTuner" className="h-8 w-8 rounded-lg object-contain" />
             <span className="text-lg md:text-xl font-bold hidden sm:inline">EasyTuner</span>
             <span className="text-lg md:text-xl font-bold sm:hidden">ET</span>
           </Link>

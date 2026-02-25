@@ -1,10 +1,13 @@
 import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, ChevronDown, Upload, ScanSearch, BarChart3, Cpu } from 'lucide-react'
+import { ArrowRight, ChevronDown, Upload, ScanSearch, BarChart3 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { usePageTitle } from '../hooks/usePageTitle'
+import etlogo from '../etlogo.png'
 
 export function Landing() {
+  usePageTitle()
   const navigate = useNavigate()
   const featuresRef = useRef<HTMLElement>(null)
 
@@ -39,10 +42,7 @@ export function Landing() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center space-x-2">
-            {/* Logo placeholder — replace with <img> once logo is ready */}
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <span className="text-lg font-bold">E</span>
-            </div>
+            <img src={etlogo} alt="EasyTuner" className="h-8 w-8 rounded-lg object-contain" />
             <span className="text-xl font-bold">EasyTuner</span>
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate('/login')}>
@@ -54,11 +54,7 @@ export function Landing() {
       {/* Hero section */}
       <main className="flex-1">
         <section className="flex flex-col items-center justify-center text-center px-4 py-24 md:py-36">
-          {/* Large logo placeholder */}
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg mb-8">
-            {/* Replace with <img src="/logo.svg" alt="EasyTuner" className="h-12 w-12" /> once available */}
-            <Cpu className="h-10 w-10" />
-          </div>
+          <img src={etlogo} alt="EasyTuner" className="h-20 w-20 rounded-2xl object-contain shadow-lg mb-8" />
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
             Easy<span className="text-primary">Tuner</span>
@@ -131,9 +127,7 @@ export function Landing() {
       <footer className="border-t py-6 px-4">
         <div className="container flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <div className="flex h-5 w-5 items-center justify-center rounded bg-primary text-primary-foreground">
-              <span className="text-xs font-bold">E</span>
-            </div>
+            <img src={etlogo} alt="EasyTuner" className="h-5 w-5 rounded object-contain" />
             <span>EasyTuner</span>
           </div>
           <span>© {new Date().getFullYear()} EasyTuner. All rights reserved.</span>

@@ -7,6 +7,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Header } from '../components/Header'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { useProjectStore } from '../store/projectStore'
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react'
 
 export function Dashboard() {
+  usePageTitle('Dashboard')
   const { projects, fetchProjects, isLoading } = useProjectStore()
 
   useEffect(() => {

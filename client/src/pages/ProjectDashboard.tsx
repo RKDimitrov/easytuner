@@ -9,6 +9,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Folder, AlertCircle, RefreshCw, Search as SearchIcon } from 'lucide-react'
 import { Header } from '../components/Header'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { ProjectCard } from '../components/ProjectCard'
 import { CreateProjectModal } from '../components/CreateProjectModal'
 import { ProjectFilters } from '../components/ProjectFilters'
@@ -105,6 +106,7 @@ function ProjectGridSkeleton({ count = 6 }: { count?: number }) {
  * Main ProjectDashboard component
  */
 export function ProjectDashboard() {
+  usePageTitle('Projects')
   const navigate = useNavigate()
   const { projects, isLoading, error, fetchProjects } = useProjectStore()
   const [sortBy, setSortBy] = useState<SortOption>('lastModified')
