@@ -230,6 +230,140 @@ async def get_library_file_scan_results(
 
 
 @router.get(
+    "/scans",
+    status_code=status.HTTP_200_OK,
+    summary="List scanned files from published projects",
+    description="Get all files that have completed scans from published projects (public)"
+)
+async def list_library_scans(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all scanned files from published projects, ordered by scan date."""
+    query = (
+        select(
+            FirmwareFile,
+            Project.project_id.label("project_id"),
+            Project.name.label("project_name"),
+            User.email.label("owner_email"),
+            ScanJob.scan_id.label("scan_id"),
+            ScanJob.created_at.label("scanned_at"),
+            ScanJob.processing_time_ms.label("processing_time_ms"),
+            func.count(Candidate.candidate_id).label("candidates_count"),
+        )
+        .join(Project, FirmwareFile.project_id == Project.project_id)
+        .join(User, User.user_id == Project.owner_user_id)
+        .join(ScanJob, ScanJob.file_id == FirmwareFile.file_id)
+        .outerjoin(Candidate, Candidate.scan_id == ScanJob.scan_id)
+        .where(
+            Project.deleted_at.is_(None),
+            Project.is_private.is_(False),
+            Project.published_at.isnot(None),
+            FirmwareFile.deleted_at.is_(None),
+            ScanJob.status == "completed",
+        )
+        .group_by(
+            FirmwareFile.file_id,
+            Project.project_id,
+            Project.name,
+            User.user_id,
+            User.email,
+            ScanJob.scan_id,
+            ScanJob.created_at,
+            ScanJob.processing_time_ms,
+        )
+        .order_by(desc(ScanJob.created_at))
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await db.execute(query)
+    rows = result.all()
+    scans = []
+    for f, project_id, project_name, owner_email, scan_id, scanned_at, proc_ms, cand_count in rows:
+        scans.append({
+            "file_id": str(f.file_id),
+            "filename": f.filename,
+            "size_bytes": f.size_bytes,
+            "sha256": f.sha256,
+            "project_id": str(project_id),
+            "project_name": project_name,
+            "owner_email": owner_email,
+            "scan_id": str(scan_id),
+            "scanned_at": scanned_at.isoformat() if scanned_at else None,
+            "processing_time_ms": proc_ms,
+            "candidates_count": cand_count or 0,
+        })
+    return {"scans": scans, "count": len(scans)}
+
+
+@router.get(
+    "/check-hash",
+    status_code=status.HTTP_200_OK,
+    summary="Check if a file hash has an existing scan in the library",
+    description="Returns scan info if a file with this SHA-256 exists in any published project"
+)
+async def check_hash(
+    sha256: str = Query(..., min_length=64, max_length=64, description="SHA-256 hex hash of the file"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Check if a file with this hash has already been scanned in a published project.
+    Used on upload to offer reusing an existing scan.
+    """
+    result = await db.execute(
+        select(
+            FirmwareFile,
+            Project.project_id.label("project_id"),
+            Project.name.label("project_name"),
+            User.email.label("owner_email"),
+            ScanJob.scan_id.label("scan_id"),
+            ScanJob.created_at.label("scanned_at"),
+            func.count(Candidate.candidate_id).label("candidates_count"),
+        )
+        .join(Project, FirmwareFile.project_id == Project.project_id)
+        .join(User, User.user_id == Project.owner_user_id)
+        .join(ScanJob, ScanJob.file_id == FirmwareFile.file_id)
+        .outerjoin(Candidate, Candidate.scan_id == ScanJob.scan_id)
+        .where(
+            FirmwareFile.sha256 == sha256,
+            FirmwareFile.deleted_at.is_(None),
+            Project.deleted_at.is_(None),
+            Project.is_private.is_(False),
+            Project.published_at.isnot(None),
+            ScanJob.status == "completed",
+        )
+        .group_by(
+            FirmwareFile.file_id,
+            Project.project_id,
+            Project.name,
+            User.user_id,
+            User.email,
+            ScanJob.scan_id,
+            ScanJob.created_at,
+        )
+        .order_by(desc(ScanJob.created_at))
+        .limit(1)
+    )
+    row = result.first()
+    if not row:
+        return {"found": False}
+    f, project_id, project_name, owner_email, scan_id, scanned_at, cand_count = row
+    return {
+        "found": True,
+        "file_id": str(f.file_id),
+        "filename": f.filename,
+        "size_bytes": f.size_bytes,
+        "project_id": str(project_id),
+        "project_name": project_name,
+        "owner_email": owner_email,
+        "scan_id": str(scan_id),
+        "scanned_at": scanned_at.isoformat() if scanned_at else None,
+        "candidates_count": cand_count or 0,
+    }
+
+
+@router.get(
     "/{project_id}/files/{file_id}/download",
     status_code=status.HTTP_200_OK,
     summary="Download file (published project)",

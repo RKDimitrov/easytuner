@@ -1,31 +1,55 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAnalysisStore } from '../store/analysisStore'
+import { useEditStore } from '../store/editStore'
 import { useUploadStore } from '../store/uploadStore'
 import { useProjectStore } from '../store/projectStore'
 import { useAuthStore } from '../store/authStore'
 import { formatBytes } from '../lib/utils'
 import { toast } from '../hooks/use-toast'
 import { uploadFile } from '../services/fileService'
+import {
+  checkLibraryHash,
+  getLibraryFileScanResults,
+  downloadLibraryFile,
+  type LibraryHashCheckFound,
+} from '../services/libraryService'
+import { convertCandidateResponse } from '../lib/candidateConversion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Progress } from '../components/ui/progress'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
+import { Badge } from '../components/ui/badge'
 import { ProjectSelector } from '../components/ProjectSelector'
 import { Header } from '../components/Header'
-import { Upload as UploadIcon, FileCode, Zap, AlertCircle } from 'lucide-react'
+import { Upload as UploadIcon, FileCode, Zap, AlertCircle, BookOpen, Map } from 'lucide-react'
 
 const MAX_FILE_SIZE = 16 * 1024 * 1024 // 16MB
 
 export function Upload() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { setFileData } = useAnalysisStore()
+  const { setFileData, setCandidates, setScanId } = useAnalysisStore()
+  const { setEditFile } = useEditStore()
   const { selectedProject, setSelectedProject, isUploading, uploadProgress, uploadError, setIsUploading, setUploadProgress, setUploadError, associateFileWithProject } = useUploadStore()
   const { projects, fetchProjects } = useProjectStore()
   const { isAuthenticated, accessToken } = useAuthStore()
   
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Library hash-check dialog state
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [libraryMatch, setLibraryMatch] = useState<LibraryHashCheckFound | null>(null)
+  const [showLibraryDialog, setShowLibraryDialog] = useState(false)
+  const [loadingLibraryScan, setLoadingLibraryScan] = useState(false)
 
   // Handle project context from URL parameters
   useEffect(() => {
@@ -43,6 +67,90 @@ export function Upload() {
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
+
+  /** Actually upload a file and navigate to analysis */
+  const doUploadAndNavigate = useCallback(async (file: File) => {
+    setIsUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+
+    try {
+      if (!selectedProject?.project_id) throw new Error('Invalid project selected')
+
+      const uploadResponse = await uploadFile(
+        selectedProject.project_id,
+        file,
+        (progress) => setUploadProgress(progress)
+      )
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        setFileData(data, file.name, uploadResponse.file_id)
+        const duplicateMsg = uploadResponse.duplicate ? ' (duplicate file, using existing)' : ''
+        toast.success('File uploaded successfully', {
+          description: `${file.name} (${formatBytes(file.size)}) uploaded to project "${selectedProject.name}"${duplicateMsg}`
+        })
+        setIsUploading(false)
+        fetchProjects()
+        navigate('/analysis')
+      }
+      reader.onerror = () => {
+        setIsUploading(false)
+        setUploadError('Failed to read file for display')
+        toast.error('Upload succeeded but failed to read file', {
+          description: 'The file was uploaded but could not be displayed. You can still view it in the project.'
+        })
+      }
+      reader.readAsArrayBuffer(file)
+    } catch (error) {
+      setIsUploading(false)
+      let errorMessage = 'Failed to upload file'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        if (errorMessage.includes('401') || errorMessage.includes('403') || errorMessage.includes('Not authenticated') || errorMessage.includes('Unauthorized')) {
+          errorMessage = 'Authentication required. Please log in again.'
+          setTimeout(() => navigate('/login', { state: { from: '/upload' } }), 2000)
+        }
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error)
+      }
+      setUploadError(errorMessage)
+      toast.error('Upload failed', { description: errorMessage })
+    }
+  }, [selectedProject, setFileData, navigate, setIsUploading, setUploadProgress, setUploadError, fetchProjects])
+
+  /** Load scan results from the library match and navigate to analysis */
+  const handleLoadFromLibrary = useCallback(async () => {
+    if (!libraryMatch) return
+    setLoadingLibraryScan(true)
+    try {
+      const [scanResults, fileBuffer] = await Promise.all([
+        getLibraryFileScanResults(libraryMatch.project_id, libraryMatch.file_id),
+        downloadLibraryFile(libraryMatch.project_id, libraryMatch.file_id),
+      ])
+      const data = new Uint8Array(fileBuffer)
+      const candidates = scanResults.candidates.map(convertCandidateResponse)
+      setFileData(data, libraryMatch.filename, libraryMatch.file_id)
+      setEditFile(libraryMatch.file_id, libraryMatch.filename, data)
+      setCandidates(candidates)
+      setScanId(libraryMatch.scan_id)
+      if (candidates.length > 0) {
+        useAnalysisStore.getState().setSelectedCandidate(candidates[0])
+      }
+      toast.success('Loaded from library', {
+        description: `Loaded ${candidates.length} maps from "${libraryMatch.project_name}"`
+      })
+      setShowLibraryDialog(false)
+      navigate('/analysis')
+    } catch (err) {
+      toast.error('Failed to load from library', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      })
+    } finally {
+      setLoadingLibraryScan(false)
+    }
+  }, [libraryMatch, setFileData, setEditFile, setCandidates, setScanId, navigate])
 
   const handleFileUpload = useCallback(async (file: File) => {
     // Check authentication first
@@ -70,81 +178,26 @@ export function Upload() {
       return
     }
 
-    // Set upload state
-    setIsUploading(true)
-    setUploadProgress(0)
-    setUploadError(null)
-
+    // Compute SHA-256 and check library for existing scan
     try {
-      // Validate project_id is a valid UUID
-      if (!selectedProject?.project_id) {
-        throw new Error('Invalid project selected')
-      }
-      
-      // Upload file to backend
-      const uploadResponse = await uploadFile(
-        selectedProject.project_id,
-        file,
-        (progress) => {
-          setUploadProgress(progress)
-        }
-      )
+      const buffer = await file.arrayBuffer()
+      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const sha256 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
-      // Read file for local display
-    const reader = new FileReader()
-      reader.onload = (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        setFileData(data, file.name, uploadResponse.file_id)
-      
-        // Show success message
-        const duplicateMsg = uploadResponse.duplicate ? ' (duplicate file, using existing)' : ''
-        toast.success('File uploaded successfully', {
-          description: `${file.name} (${formatBytes(file.size)}) uploaded to project "${selectedProject.name}"${duplicateMsg}`
-      })
-      
-      setIsUploading(false)
-        
-        // Refresh projects to update file count
-        fetchProjects()
-        
-        // Navigate to analysis page to view the hex
-      navigate('/analysis')
-    }
-    reader.onerror = () => {
-      setIsUploading(false)
-        setUploadError('Failed to read file for display')
-        toast.error('Upload succeeded but failed to read file', {
-          description: 'The file was uploaded but could not be displayed. You can still view it in the project.'
-      })
-    }
-    reader.readAsArrayBuffer(file)
-    } catch (error) {
-      setIsUploading(false)
-      let errorMessage = 'Failed to upload file'
-      
-      console.error('Upload error:', error)
-      
-      if (error instanceof Error) {
-        errorMessage = error.message
-        // Check for authentication errors
-        if (errorMessage.includes('401') || errorMessage.includes('403') || errorMessage.includes('Not authenticated') || errorMessage.includes('Unauthorized')) {
-          errorMessage = 'Authentication required. Please log in again.'
-          // Redirect to login after a short delay
-          setTimeout(() => {
-            navigate('/login', { state: { from: '/upload' } })
-          }, 2000)
-        }
-      } else if (typeof error === 'object' && error !== null) {
-        // Handle case where error might be an object
-        errorMessage = JSON.stringify(error)
+      const checkResult = await checkLibraryHash(sha256)
+      if (checkResult.found) {
+        setPendingFile(file)
+        setLibraryMatch(checkResult)
+        setShowLibraryDialog(true)
+        return
       }
-      
-      setUploadError(errorMessage)
-      toast.error('Upload failed', {
-        description: errorMessage
-      })
+    } catch {
+      // If hash check fails, proceed with normal upload silently
     }
-  }, [isAuthenticated, accessToken, setFileData, navigate, selectedProject, setIsUploading, setUploadProgress, setUploadError, fetchProjects])
+
+    await doUploadAndNavigate(file)
+  }, [isAuthenticated, accessToken, navigate, selectedProject, doUploadAndNavigate])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -243,6 +296,86 @@ export function Upload() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
+
+      {/* Library scan match dialog */}
+      <Dialog open={showLibraryDialog} onOpenChange={(open) => {
+        if (!open && !loadingLibraryScan) {
+          setShowLibraryDialog(false)
+        }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-primary" />
+              Scan already in library
+            </DialogTitle>
+            <DialogDescription>
+              This file has already been scanned and published in the library. You can load the
+              existing results instantly, or upload and scan it fresh.
+            </DialogDescription>
+          </DialogHeader>
+
+          {libraryMatch && (
+            <div className="rounded-lg border bg-muted/40 p-4 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">File</span>
+                <span className="font-medium">{libraryMatch.filename}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Project</span>
+                <Link
+                  to={`/library/${libraryMatch.project_id}`}
+                  className="text-primary hover:underline"
+                  onClick={() => setShowLibraryDialog(false)}
+                >
+                  {libraryMatch.project_name}
+                </Link>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Published by</span>
+                <span>{libraryMatch.owner_email}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Maps found</span>
+                <Badge variant="default">
+                  <Map className="w-3 h-3 mr-1" />
+                  {libraryMatch.candidates_count} map{libraryMatch.candidates_count !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowLibraryDialog(false)
+                if (pendingFile) doUploadAndNavigate(pendingFile)
+              }}
+              disabled={loadingLibraryScan}
+            >
+              <UploadIcon className="w-4 h-4 mr-2" />
+              Upload & scan fresh
+            </Button>
+            <Button
+              onClick={handleLoadFromLibrary}
+              disabled={loadingLibraryScan}
+            >
+              {loadingLibraryScan ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  Loading…
+                </span>
+              ) : (
+                <>
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Load from library
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex items-center justify-center p-4 pt-8">
         <div className="w-full max-w-4xl space-y-6">
         {/* Header */}

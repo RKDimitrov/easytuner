@@ -93,3 +93,62 @@ export async function downloadLibraryFile(
   )
   return response.data
 }
+
+export interface LibraryScanEntry {
+  file_id: string
+  filename: string
+  size_bytes: number
+  sha256: string
+  project_id: string
+  project_name: string
+  owner_email: string
+  scan_id: string
+  scanned_at: string | null
+  processing_time_ms: number | null
+  candidates_count: number
+}
+
+/**
+ * List all scanned files from published projects (public).
+ * GET /api/v1/library/scans
+ */
+export async function getLibraryScans(params?: {
+  limit?: number
+  offset?: number
+}): Promise<{ scans: LibraryScanEntry[]; count: number }> {
+  const response = await axios.get<{ scans: LibraryScanEntry[]; count: number }>(
+    `${API_BASE_URL}${API_PREFIX}/library/scans`,
+    { params: params ?? {} }
+  )
+  return response.data
+}
+
+export interface LibraryHashCheckResult {
+  found: false
+}
+export interface LibraryHashCheckFound {
+  found: true
+  file_id: string
+  filename: string
+  size_bytes: number
+  project_id: string
+  project_name: string
+  owner_email: string
+  scan_id: string
+  scanned_at: string | null
+  candidates_count: number
+}
+
+/**
+ * Check if a file hash has an existing scan in any published project (public).
+ * GET /api/v1/library/check-hash?sha256=...
+ */
+export async function checkLibraryHash(
+  sha256: string
+): Promise<LibraryHashCheckResult | LibraryHashCheckFound> {
+  const response = await axios.get<LibraryHashCheckResult | LibraryHashCheckFound>(
+    `${API_BASE_URL}${API_PREFIX}/library/check-hash`,
+    { params: { sha256 } }
+  )
+  return response.data
+}
