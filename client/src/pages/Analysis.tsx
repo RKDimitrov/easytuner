@@ -20,7 +20,7 @@ import { ChecksumStatus } from '../components/ChecksumStatus'
 import { ChecksumTester } from '../components/ChecksumTester'
 import { ExportDialog } from '../components/ExportDialog'
 import { MapPropertiesDialog } from '../components/MapPropertiesDialog'
-import { createScan, getScanResults, type CandidateResponse } from '../services/scanService'
+import { createScan, getScan, getScanResults, type CandidateResponse } from '../services/scanService'
 import { applyEdits, type EditOperation, type ChecksumConfig } from '../services/editService'
 import { downloadFile } from '../services/fileService'
 import { validateChecksum, type ChecksumValidationResponse } from '../services/checksumService'
@@ -111,6 +111,8 @@ export function Analysis() {
 
   const [scanComplete, setScanComplete] = useState(false)
   const [viewMode, setViewMode] = useState<'hex' | 'text' | '3d'>('hex')
+  const [queuePosition, setQueuePosition] = useState<number | null>(null)
+  const [estimatedWaitSeconds, setEstimatedWaitSeconds] = useState<number | null>(null)
   const [checksumConfig, setChecksumConfig] = useState<ChecksumConfig | null>(null)
   const [showChecksumDetectPopup, setShowChecksumDetectPopup] = useState(false)
   const [showChecksumDialog, setShowChecksumDialog] = useState(false)
@@ -356,15 +358,20 @@ export function Analysis() {
     }
   }
 
-  // Load existing scan results if scanId exists
+  // Load existing scan results if scanId exists, or resume polling if scan is active
   useEffect(() => {
-    if (scanId && candidates.length === 0 && !isScanning) {
+    if (!scanId) return
+    if (isScanning) {
+      // isScanning was set (e.g. by ProjectDetail when opening a file with an active scan)
+      // but the poll loop isn't running yet — start it now
+      pollUntilComplete(scanId)
+    } else if (candidates.length === 0 && !scanComplete) {
       loadScanResults(scanId)
-    } else if (scanId && candidates.length > 0 && !scanComplete) {
-      // If candidates are already loaded (e.g., from ProjectDetail), mark scan as complete
+    } else if (candidates.length > 0 && !scanComplete) {
       setScanComplete(true)
     }
-  }, [scanId, candidates.length, isScanning, scanComplete])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanId])
 
   // Optional: Auto-switch to 3D view when a candidate is selected
   // Uncomment if you want automatic switching to 3D view on selection:
@@ -414,6 +421,112 @@ export function Analysis() {
     }
   }
 
+  const formatWait = (seconds: number | null): string => {
+    if (seconds === null || seconds <= 0) return 'soon'
+    if (seconds < 60) return `~${seconds}s`
+    const mins = Math.round(seconds / 60)
+    return `~${mins} min${mins !== 1 ? 's' : ''}`
+  }
+
+  /**
+   * Poll a scan job until it completes (or fails), then load results.
+   * Safe to call both from startScan and from the mount effect (resume after reload).
+   */
+  const pollUntilComplete = async (activeScanId: string) => {
+    let pollInterval: NodeJS.Timeout | null = null
+    let progressInterval: NodeJS.Timeout | null = null
+
+    const cleanup = () => {
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
+      if (progressInterval) { clearInterval(progressInterval); progressInterval = null }
+    }
+
+    try {
+      // Determine initial progress based on current status
+      const initial = await getScan(activeScanId)
+      const startProgress = initial.status === 'processing' ? 30 : 5
+      setScanProgress(startProgress)
+      setQueuePosition(initial.queue_position)
+      setEstimatedWaitSeconds(initial.estimated_wait_seconds)
+
+      // If already completed (e.g. finished between page load and first poll), go straight to results
+      if (initial.status === 'completed') {
+        setScanProgress(95)
+        const results = await getScanResults(activeScanId)
+        setScanProgress(100)
+        setQueuePosition(null)
+        setEstimatedWaitSeconds(null)
+        setCandidates(results.candidates.map(convertCandidate))
+        setIsScanning(false)
+        setScanComplete(true)
+        toast.success('Scan complete', { description: `Found ${results.total_candidates} candidate maps` })
+        return
+      }
+      if (initial.status === 'failed') {
+        setIsScanning(false)
+        setScanProgress(0)
+        setQueuePosition(null)
+        setEstimatedWaitSeconds(null)
+        toast.error('Scan failed', { description: initial.error_message || 'The scan failed on the server' })
+        return
+      }
+
+      // Slowly animate progress while processing (30% → 90% over ~10 minutes)
+      // Advances ~0.1% every 2 seconds = ~60% in 10 min, capped at 90
+      let currentProgress = startProgress
+      progressInterval = setInterval(() => {
+        currentProgress = Math.min(currentProgress + 0.1, 90)
+        setScanProgress(currentProgress)
+      }, 2000)
+
+      // Poll status every 6 seconds
+      await new Promise<void>((resolve, reject) => {
+        pollInterval = setInterval(async () => {
+          try {
+            const statusRes = await getScan(activeScanId)
+            setQueuePosition(statusRes.queue_position)
+            setEstimatedWaitSeconds(statusRes.estimated_wait_seconds)
+
+            if (statusRes.status === 'processing' && currentProgress < 30) {
+              currentProgress = 30
+              setScanProgress(30)
+            }
+            if (statusRes.status === 'completed') {
+              cleanup()
+              resolve()
+            } else if (statusRes.status === 'failed') {
+              cleanup()
+              reject(new Error(statusRes.error_message || 'Scan failed on the server'))
+            }
+          } catch (pollError) {
+            cleanup()
+            reject(pollError)
+          }
+        }, 6000)
+      })
+
+      setScanProgress(95)
+      const results = await getScanResults(activeScanId)
+      setScanProgress(100)
+      setQueuePosition(null)
+      setEstimatedWaitSeconds(null)
+      setCandidates(results.candidates.map(convertCandidate))
+      setIsScanning(false)
+      setScanComplete(true)
+      toast.success('Scan complete', { description: `Found ${results.total_candidates} candidate maps` })
+    } catch (error) {
+      console.error('Scan polling failed:', error)
+      cleanup()
+      setIsScanning(false)
+      setScanProgress(0)
+      setQueuePosition(null)
+      setEstimatedWaitSeconds(null)
+      toast.error('Scan failed', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
+      })
+    }
+  }
+
   const startScan = async () => {
     if (isScanning || !fileId) return
 
@@ -422,26 +535,11 @@ export function Analysis() {
     setScanComplete(false)
     setCandidates([])
     setViewMode('hex')
+    setQueuePosition(null)
+    setEstimatedWaitSeconds(null)
 
-    toast.info('Scan started', {
-      description: 'Analyzing firmware file for ECU maps...'
-    })
-
-    let progressInterval: NodeJS.Timeout | null = null
-    
     try {
-      // Create scan job (this executes synchronously on the backend)
-      setScanProgress(10)
-      
-      // Simulate progress while waiting for scan to complete
-      let currentProgress = 10
-      progressInterval = setInterval(() => {
-        // Gradually increase progress, but cap at 90% until complete
-        currentProgress = Math.min(currentProgress + Math.random() * 5, 90)
-        currentProgress = Math.max(0, Math.min(100, currentProgress)) // Ensure between 0 and 100
-        setScanProgress(currentProgress)
-      }, 200)
-
+      // Enqueue the scan — returns immediately with queued status
       const scanResponse = await createScan({
         file_id: fileId,
         data_types: ['u8', 'u16le', 'u16be', 'u32le'],
@@ -450,38 +548,25 @@ export function Analysis() {
         min_confidence: 0.5,
       })
 
-      if (progressInterval) {
-        clearInterval(progressInterval)
-        progressInterval = null
-      }
-      
       setScanId(scanResponse.scan_id)
-      setScanProgress(95)
 
-      // Fetch results
-      const results = await getScanResults(scanResponse.scan_id)
-      setScanProgress(100)
-
-      // Convert and set candidates
-      const convertedCandidates = results.candidates.map(convertCandidate)
-      setCandidates(convertedCandidates)
-        setIsScanning(false)
-        setScanComplete(true)
-        
-        toast.success('Scan complete', {
-        description: `Found ${results.total_candidates} candidate maps`
+      if ((scanResponse.queue_position ?? 0) > 1) {
+        toast.info('Added to scan queue', {
+          description: `Position ${scanResponse.queue_position} in queue — estimated wait ${formatWait(scanResponse.estimated_wait_seconds)}`
         })
+      } else {
+        toast.info('Scan started', {
+          description: 'Analyzing firmware file for ECU maps...'
+        })
+      }
+
+      await pollUntilComplete(scanResponse.scan_id)
     } catch (error) {
       console.error('Scan failed:', error)
-      
-      // Clear progress interval if it exists
-      if (progressInterval) {
-        clearInterval(progressInterval)
-        progressInterval = null
-      }
-      
       setIsScanning(false)
       setScanProgress(0)
+      setQueuePosition(null)
+      setEstimatedWaitSeconds(null)
       toast.error('Scan failed', {
         description: error instanceof Error ? error.message : 'Unknown error occurred'
       })
@@ -731,15 +816,54 @@ export function Analysis() {
                   <div className="flex items-center gap-3 mb-4">
                     <Loader2 className="w-8 h-8 text-primary animate-spin shrink-0" />
                     <div>
-                      <h2 className="text-lg font-semibold">Scanning firmware</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Analyzing the file for ECU maps. You can keep editing on the right.
-                      </p>
+                      {queuePosition !== null && queuePosition > 0 ? (
+                        <>
+                          <h2 className="text-lg font-semibold">Waiting in queue</h2>
+                          <p className="text-sm text-muted-foreground">
+                            Your scan will start once the current job finishes.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <h2 className="text-lg font-semibold">Scanning firmware</h2>
+                          <p className="text-sm text-muted-foreground">
+                            Analyzing the file for ECU maps. You can keep editing on the right.
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
+
+                  {/* Queue position badge */}
+                  {queuePosition !== null && queuePosition > 0 && (
+                    <div className="mb-4 flex flex-wrap gap-3">
+                      <div className="flex-1 min-w-[120px] rounded-lg border border-border bg-muted/40 px-4 py-3 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">Queue position</p>
+                        <p className="text-2xl font-bold text-primary">#{queuePosition}</p>
+                      </div>
+                      <div className="flex-1 min-w-[120px] rounded-lg border border-border bg-muted/40 px-4 py-3 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">Estimated wait</p>
+                        <p className="text-2xl font-bold text-primary">
+                          {formatWait(estimatedWaitSeconds)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Processing indicator when position is 0 (actively scanning) */}
+                  {(queuePosition === 0 || queuePosition === null) && (
+                    <div className="mb-4 rounded-lg border border-border bg-muted/40 px-4 py-3 text-center">
+                      <p className="text-xs text-muted-foreground mb-1">Status</p>
+                      <p className="text-sm font-semibold text-primary">Processing your file…</p>
+                      <p className="text-xs text-muted-foreground mt-1">This typically takes 7–10 minutes</p>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Progress</span>
+                      <span className="text-muted-foreground">
+                        {queuePosition !== null && queuePosition > 0 ? 'Queued' : 'Progress'}
+                      </span>
                       <span className="font-mono text-primary">
                         {typeof scanProgress === 'number' && !isNaN(scanProgress)
                           ? Math.round(scanProgress)

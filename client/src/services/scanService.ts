@@ -50,7 +50,7 @@ export interface ScanCreateRequest {
 export interface ScanResponse {
   scan_id: string
   file_id: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'queued' | 'processing' | 'completed' | 'failed'
   config: Record<string, any>
   candidates_found: number | null
   processing_time_ms: number | null
@@ -59,6 +59,17 @@ export interface ScanResponse {
   completed_at: string | null
   created_at: string
   updated_at: string
+  // Queue info — present while status is 'queued' or 'processing'
+  queue_position: number | null
+  estimated_wait_seconds: number | null
+}
+
+export interface QueueStatusResponse {
+  queued_count: number
+  processing_count: number
+  total_active: number
+  estimated_wait_seconds: number
+  avg_scan_duration_seconds: number
 }
 
 export interface CandidateResponse {
@@ -149,6 +160,23 @@ export async function getScanCandidates(scanId: string, limit = 100, offset = 0)
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(error.response?.data?.detail || 'Failed to get scan candidates')
+    }
+    throw error
+  }
+}
+
+/**
+ * Get global scan queue status
+ * GET /api/v1/scans/queue/status
+ */
+export async function getQueueStatus(): Promise<QueueStatusResponse> {
+  try {
+    const api = createAuthAxios()
+    const response = await api.get<QueueStatusResponse>('/scans/queue/status')
+    return response.data
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.detail || 'Failed to get queue status')
     }
     throw error
   }

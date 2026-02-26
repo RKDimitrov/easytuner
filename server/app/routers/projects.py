@@ -624,7 +624,19 @@ async def get_project_files(
             .limit(1)
         )
         latest_scan = latest_scan_result.scalar_one_or_none()
-        
+
+        # Get active (queued or processing) scan if any
+        active_scan_result = await db.execute(
+            select(ScanJob)
+            .where(
+                ScanJob.file_id == file.file_id,
+                ScanJob.status.in_(['queued', 'processing'])
+            )
+            .order_by(desc(ScanJob.created_at))
+            .limit(1)
+        )
+        active_scan = active_scan_result.scalar_one_or_none()
+
         files.append({
             "file_id": str(file.file_id),
             "filename": file.filename,
@@ -636,7 +648,9 @@ async def get_project_files(
             "has_scan": latest_scan is not None,
             "latest_scan_id": str(latest_scan.scan_id) if latest_scan else None,
             "latest_scan_at": latest_scan.created_at.isoformat() if latest_scan else None,
-            "scan_count": scan_count
+            "scan_count": scan_count,
+            "active_scan_id": str(active_scan.scan_id) if active_scan else None,
+            "active_scan_status": active_scan.status if active_scan else None,
         })
     
     return {

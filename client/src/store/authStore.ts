@@ -312,8 +312,11 @@ export function setupAuthInterceptor() {
       async (error) => {
         const originalRequest = error.config
 
+        // Skip refresh logic for auth endpoints (login, register, refresh, logout)
+        const isAuthEndpoint = originalRequest.url?.includes('/api/v1/auth/')
+
         // If 401 and we haven't tried to refresh yet
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
           // If already refreshing, queue this request
           if (isRefreshing) {
             return new Promise((resolve, reject) => {

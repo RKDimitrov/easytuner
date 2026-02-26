@@ -186,6 +186,9 @@ export interface ProjectFile {
   latest_scan_id: string | null
   latest_scan_at: string | null
   scan_count: number
+  /** Scan that is currently queued or processing (not yet completed) */
+  active_scan_id: string | null
+  active_scan_status: 'queued' | 'processing' | null
 }
 
 export interface ProjectFilesResponse {

@@ -52,11 +52,23 @@ class ScanResponse(BaseModel):
     completed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    
+    # Queue info (only populated while queued/processing)
+    queue_position: Optional[int] = None
+    estimated_wait_seconds: Optional[int] = None
+
     model_config = {
         "from_attributes": True,
         "populate_by_name": True
     }
+
+
+class QueueStatusResponse(BaseModel):
+    """Response schema for global queue status."""
+    queued_count: int
+    processing_count: int
+    total_active: int
+    estimated_wait_seconds: int
+    avg_scan_duration_seconds: int
 
 
 class CandidateResponse(BaseModel):

@@ -28,11 +28,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.environment == "development":
         print("🔧 Initializing database tables...")
         await init_db()
+
+    # Start the scan queue worker
+    from app.services.scan_queue import scan_queue
+    scan_queue.start()
+    print("📋 Scan queue worker started")
     
     yield
     
     # Shutdown
     print("👋 Shutting down EasyTuner Server...")
+    await scan_queue.stop()
     await close_db()
 
 

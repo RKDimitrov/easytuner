@@ -494,7 +494,7 @@ function UploadFileDialog({
  */
 function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Project; onProjectUpdate: () => void; onUploadClick?: () => void }) {
   const navigate = useNavigate()
-  const { setFileData, setCandidates, setScanId } = useAnalysisStore()
+  const { setFileData, setCandidates, setScanId, setIsScanning } = useAnalysisStore()
   const [files, setFiles] = useState<ProjectFile[]>([])
   const [loading, setLoading] = useState(true)
   const [openingFileId, setOpeningFileId] = useState<string | null>(null)
@@ -531,21 +531,23 @@ function FilesTab({ project, onProjectUpdate, onUploadClick }: { project: Projec
       
       // Set file data in store
       setFileData(uint8Array, file.filename, file.file_id)
-      
-      // If file has a scan, load the candidates
-      if (file.has_scan && file.latest_scan_id) {
+
+      // If there is an active (queued/processing) scan, resume polling on the analysis page
+      if (file.active_scan_id) {
+        setScanId(file.active_scan_id)
+        setIsScanning(true)
+        setCandidates([])
+      } else if (file.has_scan && file.latest_scan_id) {
+        // Load completed scan results
         try {
-          // Load scan results using scan service
           const scanData = await getScanResults(file.latest_scan_id)
           setScanId(file.latest_scan_id)
           const candidates = scanData.candidates.map(convertCandidateResponse)
           setCandidates(candidates)
         } catch (error) {
           console.warn('Failed to load scan results:', error)
-          // Continue anyway - file will load without scan results
         }
       } else {
-        // Clear candidates if no scan
         setCandidates([])
         setScanId(null)
       }
@@ -1008,7 +1010,7 @@ function ProjectDetailSkeleton() {
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const { setFileData, setCandidates, setScanId } = useAnalysisStore()
+  const { setFileData, setCandidates, setScanId, setIsScanning: setIsActivelyScanningMain } = useAnalysisStore()
   const { projects, isLoading, fetchProjects } = useProjectStore()
   const [project, setProject] = useState<Project | null>(null)
   usePageTitle(project ? project.name : 'Project')
@@ -1029,7 +1031,11 @@ export function ProjectDetail() {
       const fileData = await downloadFile(file.file_id)
       const uint8Array = new Uint8Array(fileData)
       setFileData(uint8Array, file.filename, file.file_id)
-      if (file.has_scan && file.latest_scan_id) {
+      if (file.active_scan_id) {
+        setScanId(file.active_scan_id)
+        setIsActivelyScanningMain(true)
+        setCandidates([])
+      } else if (file.has_scan && file.latest_scan_id) {
         try {
           const scanData = await getScanResults(file.latest_scan_id)
           setScanId(file.latest_scan_id)
@@ -1049,7 +1055,7 @@ export function ProjectDetail() {
     } finally {
       setOpeningFileId(null)
     }
-  }, [project, navigate, setFileData, setCandidates, setScanId])
+  }, [project, navigate, setFileData, setCandidates, setScanId, setIsActivelyScanningMain])
 
   const handleProjectUpdate = async () => {
     // Refresh project list to get updated project data
