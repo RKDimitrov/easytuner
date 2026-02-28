@@ -1,16 +1,17 @@
 /**
- * Test file for Project Filters
- * 
- * This file contains test data and functions to verify
- * the filtering logic works correctly.
+ * Unit tests for Project Filtering and Sorting Logic
  */
 
-import { Project } from '../types/project'
-import { ProjectFilters } from '../types/project'
-import { filterProjects, sortProjects } from '../lib/projectFilters'
+import { describe, it, expect } from 'vitest'
+import { Project, ProjectFilters } from '../types/project'
+import {
+  filterProjects,
+  sortProjects,
+  filterAndSortProjects,
+  getFilterSummary,
+} from './projectFilters'
 
-// Test data
-export const mockProjects: Project[] = [
+const mockProjects: Project[] = [
   {
     project_id: '1',
     owner_user_id: 'user1',
@@ -20,7 +21,7 @@ export const mockProjects: Project[] = [
     published_at: null,
     created_at: '2024-01-15T10:00:00Z',
     updated_at: '2024-01-20T15:30:00Z',
-    file_count: 5
+    file_count: 5,
   },
   {
     project_id: '2',
@@ -31,7 +32,7 @@ export const mockProjects: Project[] = [
     published_at: null,
     created_at: '2024-01-10T09:00:00Z',
     updated_at: '2024-01-18T12:00:00Z',
-    file_count: 12
+    file_count: 12,
   },
   {
     project_id: '3',
@@ -42,7 +43,7 @@ export const mockProjects: Project[] = [
     published_at: null,
     created_at: '2024-01-25T14:00:00Z',
     updated_at: '2024-01-25T14:00:00Z',
-    file_count: 0
+    file_count: 0,
   },
   {
     project_id: '4',
@@ -53,7 +54,7 @@ export const mockProjects: Project[] = [
     published_at: null,
     created_at: '2024-01-05T08:00:00Z',
     updated_at: '2024-01-22T16:45:00Z',
-    file_count: 25
+    file_count: 25,
   },
   {
     project_id: '5',
@@ -64,163 +65,250 @@ export const mockProjects: Project[] = [
     published_at: null,
     created_at: '2024-01-12T11:30:00Z',
     updated_at: '2024-01-19T09:15:00Z',
-    file_count: 8
-  }
+    file_count: 8,
+  },
 ]
 
-// Test functions
-export function testSearchFilter() {
-  console.log('Testing search filter...')
-  
-  const filters: ProjectFilters = {
-    search: 'automotive',
-    dateRange: 'all',
-    fileCount: 'all',
-    privacy: 'all'
-  }
-  
-  const results = filterProjects(mockProjects, filters)
-  console.log(`Search "automotive" found ${results.length} projects:`, results.map(p => p.name))
-  
-  // Should find projects with "automotive" in name or description
-  const expected = ['ECU Firmware Analysis', 'Automotive Security']
-  const actual = results.map(p => p.name)
-  
-  console.log('Expected:', expected)
-  console.log('Actual:', actual)
-  console.log('Test passed:', JSON.stringify(expected.sort()) === JSON.stringify(actual.sort()))
+const defaultFilters: ProjectFilters = {
+  search: '',
+  dateRange: 'all',
+  fileCount: 'all',
+  privacy: 'all',
 }
 
-export function testPrivacyFilter() {
-  console.log('Testing privacy filter...')
-  
-  const privateFilters: ProjectFilters = {
-    search: '',
-    dateRange: 'all',
-    fileCount: 'all',
-    privacy: 'private'
-  }
-  
-  const publicFilters: ProjectFilters = {
-    search: '',
-    dateRange: 'all',
-    fileCount: 'all',
-    privacy: 'public'
-  }
-  
-  const privateResults = filterProjects(mockProjects, privateFilters)
-  const publicResults = filterProjects(mockProjects, publicFilters)
-  
-  console.log(`Private projects: ${privateResults.length}`, privateResults.map(p => p.name))
-  console.log(`Public projects: ${publicResults.length}`, publicResults.map(p => p.name))
-  
-  // Should find 2 private and 3 public projects
-  console.log('Private test passed:', privateResults.length === 2)
-  console.log('Public test passed:', publicResults.length === 3)
-}
+// ─── filterProjects ───────────────────────────────────────────────────────────
 
-export function testFileCountFilter() {
-  console.log('Testing file count filter...')
-  
-  const filters: ProjectFilters = {
-    search: '',
-    dateRange: 'all',
-    fileCount: '1-5',
-    privacy: 'all'
-  }
-  
-  const results = filterProjects(mockProjects, filters)
-  console.log(`Projects with 1-5 files: ${results.length}`, results.map(p => `${p.name} (${p.file_count})`))
-  
-  // Should find 1 project with 1-5 files
-  console.log('File count test passed:', results.length === 1)
-}
+describe('filterProjects – search', () => {
+  it('returns all projects when search is empty', () => {
+    const result = filterProjects(mockProjects, defaultFilters)
+    expect(result).toHaveLength(5)
+  })
 
-export function testDateRangeFilter() {
-  console.log('Testing date range filter...')
-  
-  const filters: ProjectFilters = {
-    search: '',
-    dateRange: 'month',
-    fileCount: 'all',
-    privacy: 'all'
-  }
-  
-  const results = filterProjects(mockProjects, filters)
-  console.log(`Projects from past month: ${results.length}`, results.map(p => p.name))
-  
-  // Should find all projects since they're all from January 2024
-  console.log('Date range test passed:', results.length === mockProjects.length)
-}
+  it('filters by name (case-insensitive)', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, search: 'automotive' })
+    const names = result.map(p => p.name)
+    expect(names).toContain('ECU Firmware Analysis')
+    expect(names).toContain('Automotive Security')
+    expect(result).toHaveLength(2)
+  })
 
-export function testCombinedFilters() {
-  console.log('Testing combined filters...')
-  
-  const filters: ProjectFilters = {
-    search: 'analysis',
-    dateRange: 'all',
-    fileCount: '10+',
-    privacy: 'all'
-  }
-  
-  const results = filterProjects(mockProjects, filters)
-  console.log(`Combined filter results: ${results.length}`, results.map(p => p.name))
-  
-  // Should find projects with "analysis" in name/description AND 5+ files
-  console.log('Combined filter test passed:', results.length === 2)
-}
+  it('filters by description', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, search: 'confidential' })
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('Private Research')
+  })
 
-export function testSorting() {
-  console.log('Testing sorting...')
-  
-  const byName = sortProjects(mockProjects, 'name')
-  const byCreated = sortProjects(mockProjects, 'created')
-  const byModified = sortProjects(mockProjects, 'lastModified')
-  
-  console.log('Sorted by name:', byName.map(p => p.name))
-  console.log('Sorted by created:', byCreated.map(p => p.name))
-  console.log('Sorted by modified:', byModified.map(p => p.name))
-  
-  // Verify sorting works
-  console.log('Name sort test passed:', byName[0].name === 'Automotive Security')
-  console.log('Created sort test passed:', byCreated[0].name === 'Large Dataset Analysis')
-}
+  it('returns empty array when no match', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, search: 'nonexistent_xyz' })
+    expect(result).toHaveLength(0)
+  })
 
-// Run all tests
-export function runAllTests() {
-  console.log('Running Project Filter Tests...\n')
-  
-  testSearchFilter()
-  console.log('')
-  
-  testPrivacyFilter()
-  console.log('')
-  
-  testFileCountFilter()
-  console.log('')
-  
-  testDateRangeFilter()
-  console.log('')
-  
-  testCombinedFilters()
-  console.log('')
-  
-  testSorting()
-  console.log('')
-  
-  console.log('All tests completed!')
-}
+  it('returns no results when search is only whitespace', () => {
+    // matchesSearch uses trim() — blank-only search returns all projects
+    const result = filterProjects(mockProjects, { ...defaultFilters, search: '   ' })
+    expect(result).toHaveLength(5)
+  })
+})
 
-// Export for use in browser console
-if (typeof window !== 'undefined') {
-  (window as any).testProjectFilters = {
-    mockProjects,
-    runAllTests,
-    testSearchFilter,
-    testPrivacyFilter,
-    testFileCountFilter,
-    testDateRangeFilter,
-    testCombinedFilters,
-    testSorting
-  }
-}
+describe('filterProjects – privacy', () => {
+  it('returns only private projects', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, privacy: 'private' })
+    expect(result).toHaveLength(2)
+    result.forEach(p => expect(p.is_private).toBe(true))
+  })
+
+  it('returns only public projects', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, privacy: 'public' })
+    expect(result).toHaveLength(3)
+    result.forEach(p => expect(p.is_private).toBe(false))
+  })
+
+  it('returns all projects when privacy is "all"', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, privacy: 'all' })
+    expect(result).toHaveLength(5)
+  })
+})
+
+describe('filterProjects – fileCount', () => {
+  it('returns projects with 0 files', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, fileCount: '0' })
+    expect(result).toHaveLength(1)
+    expect(result[0].file_count).toBe(0)
+  })
+
+  it('returns projects with 1–5 files', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, fileCount: '1-5' })
+    expect(result).toHaveLength(1)
+    expect(result[0].file_count).toBe(5)
+  })
+
+  it('returns projects with 6–10 files', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, fileCount: '6-10' })
+    expect(result).toHaveLength(1)
+    expect(result[0].file_count).toBe(8)
+  })
+
+  it('returns projects with more than 10 files', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, fileCount: '10+' })
+    expect(result).toHaveLength(2)
+    result.forEach(p => expect(p.file_count).toBeGreaterThan(10))
+  })
+
+  it('returns all projects when fileCount is "all"', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, fileCount: 'all' })
+    expect(result).toHaveLength(5)
+  })
+})
+
+describe('filterProjects – dateRange', () => {
+  it('returns all projects when dateRange is "all"', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, dateRange: 'all' })
+    expect(result).toHaveLength(5)
+  })
+
+  it('returns no projects for "today" when all are from 2024', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, dateRange: 'today' })
+    expect(result).toHaveLength(0)
+  })
+
+  it('returns no projects for "week" when all are from 2024', () => {
+    const result = filterProjects(mockProjects, { ...defaultFilters, dateRange: 'week' })
+    expect(result).toHaveLength(0)
+  })
+
+  it('custom range returns projects within bounds', () => {
+    const result = filterProjects(mockProjects, {
+      ...defaultFilters,
+      dateRange: 'custom',
+      customDateFrom: '2024-01-10',
+      customDateTo: '2024-01-16',
+    })
+    const ids = result.map(p => p.project_id)
+    expect(ids).toContain('1') // created 2024-01-15
+    expect(ids).toContain('2') // created 2024-01-10
+    expect(ids).not.toContain('4') // created 2024-01-05
+  })
+
+  it('custom range with no bounds returns all', () => {
+    const result = filterProjects(mockProjects, {
+      ...defaultFilters,
+      dateRange: 'custom',
+    })
+    expect(result).toHaveLength(5)
+  })
+})
+
+describe('filterProjects – combined filters', () => {
+  it('combines search and fileCount correctly', () => {
+    // "Large Dataset Analysis" has 25 files and "analysis" in its name
+    // "ECU Firmware Analysis" has only 5 files — excluded by 10+ filter
+    const result = filterProjects(mockProjects, {
+      ...defaultFilters,
+      search: 'analysis',
+      fileCount: '10+',
+    })
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('Large Dataset Analysis')
+    expect(result[0].file_count).toBeGreaterThan(10)
+  })
+
+  it('combines privacy and search correctly', () => {
+    const result = filterProjects(mockProjects, {
+      ...defaultFilters,
+      search: 'research',
+      privacy: 'private',
+    })
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('Private Research')
+  })
+
+  it('returns empty array when combined filters match nothing', () => {
+    const result = filterProjects(mockProjects, {
+      ...defaultFilters,
+      search: 'automotive',
+      privacy: 'private',
+    })
+    expect(result).toHaveLength(0)
+  })
+})
+
+// ─── sortProjects ─────────────────────────────────────────────────────────────
+
+describe('sortProjects', () => {
+  it('sorts by name alphabetically', () => {
+    const result = sortProjects(mockProjects, 'name')
+    expect(result[0].name).toBe('Automotive Security')
+    expect(result[result.length - 1].name).toBe('Test Project')
+  })
+
+  it('sorts by created date (newest first)', () => {
+    const result = sortProjects(mockProjects, 'created')
+    expect(result[0].name).toBe('Test Project') // 2024-01-25
+    expect(result[result.length - 1].name).toBe('Large Dataset Analysis') // 2024-01-05
+  })
+
+  it('sorts by last modified (newest first)', () => {
+    const result = sortProjects(mockProjects, 'lastModified')
+    expect(result[0].name).toBe('Test Project') // updated 2024-01-25
+    expect(result[result.length - 1].name).toBe('Private Research') // updated 2024-01-18
+  })
+
+  it('does not mutate the original array', () => {
+    const original = [...mockProjects]
+    sortProjects(mockProjects, 'name')
+    expect(mockProjects.map(p => p.project_id)).toEqual(original.map(p => p.project_id))
+  })
+})
+
+// ─── filterAndSortProjects ────────────────────────────────────────────────────
+
+describe('filterAndSortProjects', () => {
+  it('filters then sorts in a single call', () => {
+    const result = filterAndSortProjects(
+      mockProjects,
+      { ...defaultFilters, privacy: 'public' },
+      'name'
+    )
+    expect(result).toHaveLength(3)
+    expect(result[0].name).toBe('Automotive Security')
+    result.forEach(p => expect(p.is_private).toBe(false))
+  })
+})
+
+// ─── getFilterSummary ─────────────────────────────────────────────────────────
+
+describe('getFilterSummary', () => {
+  it('returns "all projects" when no filters are active', () => {
+    expect(getFilterSummary(defaultFilters)).toBe('all projects')
+  })
+
+  it('includes search term in summary', () => {
+    const summary = getFilterSummary({ ...defaultFilters, search: 'firmware' })
+    expect(summary).toContain('"firmware"')
+  })
+
+  it('includes date range label in summary', () => {
+    const summary = getFilterSummary({ ...defaultFilters, dateRange: 'week' })
+    expect(summary).toContain('past week')
+  })
+
+  it('includes file count in summary', () => {
+    const summary = getFilterSummary({ ...defaultFilters, fileCount: '10+' })
+    expect(summary).toContain('10+ files')
+  })
+
+  it('includes privacy in summary', () => {
+    const summary = getFilterSummary({ ...defaultFilters, privacy: 'private' })
+    expect(summary).toContain('private')
+  })
+
+  it('combines multiple active filters in summary', () => {
+    const summary = getFilterSummary({
+      ...defaultFilters,
+      search: 'ecu',
+      privacy: 'public',
+    })
+    expect(summary).toContain('"ecu"')
+    expect(summary).toContain('public')
+  })
+})

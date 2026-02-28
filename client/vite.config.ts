@@ -4,6 +4,17 @@ import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/lib/**/*.ts', 'src/services/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
+    },
+  },
   plugins: [react()],
   resolve: {
     alias: {
