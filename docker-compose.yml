@@ -5,16 +5,16 @@ services:
     container_name: easytuner-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: easytuner
-      POSTGRES_USER: easytuner
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:-easytuner}
+      POSTGRES_USER: ${POSTGRES_USER:-easytuner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U easytuner -d easytuner"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easytuner} -d ${POSTGRES_DB:-easytuner}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,13 +26,13 @@ services:
     image: redis:7-alpine
     container_name: easytuner-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -48,12 +48,12 @@ services:
     restart: unless-stopped
     command: poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      - DATABASE_URL=postgresql+asyncpg://easytuner:password@postgres:5432/easytuner
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-easytuner}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-easytuner}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ENVIRONMENT=development
       - DEBUG=true
-      - JWT_SECRET_KEY=easytuner_dev_secret_key_9a8b7c6d5e4f3g2h1i0j9k8l7m6n5o4p3q2r1s0t9u8v7w6x5y4z3a2b1c0
-      - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173","https://easytuner.me","https://www.easytuner.me","https://easytuner.vercel.app"]
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173","https://easytuner.me","https://www.easytuner.me","https://easytuner.vercel.app"]}
       - CORS_ALLOW_CREDENTIALS=true
       - CORS_ALLOW_METHODS=["*"]
       - CORS_ALLOW_HEADERS=["*"]
@@ -87,4 +87,3 @@ volumes:
 networks:
   easytuner-network:
     driver: bridge
-
