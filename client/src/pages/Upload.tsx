@@ -37,7 +37,7 @@ export function Upload() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { setFileData, setCandidates, setScanId } = useAnalysisStore()
-  const { setEditFile } = useEditStore()
+  const setEditFile = useEditStore((state) => state.setFile)
   const { selectedProject, setSelectedProject, isUploading, uploadProgress, uploadError, setIsUploading, setUploadProgress, setUploadError, associateFileWithProject } = useUploadStore()
   const { projects, fetchProjects } = useProjectStore()
   const { isAuthenticated, accessToken } = useAuthStore()
@@ -132,7 +132,7 @@ export function Upload() {
       const data = new Uint8Array(fileBuffer)
       const candidates = scanResults.candidates.map(convertCandidateResponse)
       setFileData(data, libraryMatch.filename, libraryMatch.file_id)
-      setEditFile(libraryMatch.file_id, libraryMatch.filename, data)
+      setEditFile(libraryMatch.file_id, data)
       setCandidates(candidates)
       setScanId(libraryMatch.scan_id)
       if (candidates.length > 0) {
