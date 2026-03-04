@@ -35,6 +35,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_private: Optional[bool] = None
+    vehicle_model: Optional[str] = None
 
 
 @router.get(
@@ -94,6 +95,7 @@ async def list_projects(
                 "name": project.name,
                 "description": project.description,
                 "is_private": project.is_private,
+                "vehicle_model": project.vehicle_model,
                 "published_at": project.published_at.isoformat() if project.published_at else None,
                 "created_at": project.created_at.isoformat(),
                 "updated_at": project.updated_at.isoformat(),
@@ -174,6 +176,7 @@ async def get_project(
         "name": project.name,
         "description": project.description,
         "is_private": project.is_private,
+        "vehicle_model": project.vehicle_model,
         "published_at": project.published_at.isoformat() if project.published_at else None,
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
@@ -229,6 +232,7 @@ async def publish_project(
         "name": project.name,
         "description": project.description,
         "is_private": project.is_private,
+        "vehicle_model": project.vehicle_model,
         "published_at": project.published_at.isoformat(),
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
@@ -279,6 +283,7 @@ async def unpublish_project(
         "name": project.name,
         "description": project.description,
         "is_private": project.is_private,
+        "vehicle_model": project.vehicle_model,
         "published_at": None,
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
@@ -392,6 +397,7 @@ async def create_project(
             "name": project.name,
             "description": project.description,
             "is_private": project.is_private,
+            "vehicle_model": project.vehicle_model,
             "published_at": project.published_at.isoformat() if project.published_at else None,
             "created_at": project.created_at.isoformat(),
             "updated_at": project.updated_at.isoformat(),
@@ -450,16 +456,18 @@ async def update_project(
             detail="Project not found or access denied"
         )
     
-    # Update fields
-    if project_data.name is not None:
-        project.name = project_data.name
-    if project_data.description is not None:
-        project.description = project_data.description
-    if project_data.is_private is not None:
-        project.is_private = project_data.is_private
-        # Unpublish when making project private
-        if project_data.is_private:
+    # Update only fields that were sent
+    update_data = project_data.model_dump(exclude_unset=True)
+    if "name" in update_data:
+        project.name = update_data["name"]
+    if "description" in update_data:
+        project.description = update_data["description"]
+    if "is_private" in update_data:
+        project.is_private = update_data["is_private"]
+        if update_data["is_private"]:
             project.published_at = None
+    if "vehicle_model" in update_data:
+        project.vehicle_model = update_data["vehicle_model"]
     
     try:
         await db.commit()
@@ -481,6 +489,7 @@ async def update_project(
             "name": project.name,
             "description": project.description,
             "is_private": project.is_private,
+            "vehicle_model": project.vehicle_model,
             "published_at": project.published_at.isoformat() if project.published_at else None,
             "created_at": project.created_at.isoformat(),
             "updated_at": project.updated_at.isoformat(),

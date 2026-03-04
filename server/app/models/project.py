@@ -70,6 +70,13 @@ class Project(Base, TimestampMixin):
         doc="Optional project description",
     )
 
+    # Vehicle/ECU context for map assistant (e.g. "BMW N55 2015")
+    vehicle_model: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        doc="Optional vehicle or ECU model for tuning context",
+    )
+
     # Privacy
     is_private: Mapped[bool] = mapped_column(
         Boolean,

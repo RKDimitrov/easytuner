@@ -82,7 +82,6 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile.dev
-      provenance: false
     container_name: easytuner-server
     restart: unless-stopped
     command: poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -124,7 +123,6 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile.dev
-      provenance: false
     container_name: easytuner-worker
     restart: unless-stopped
     command: poetry run celery -A app.tasks worker --loglevel=info --concurrency=4

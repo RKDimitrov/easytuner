@@ -2,7 +2,7 @@
 
 import json
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import Field, PostgresDsn, RedisDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     # Detection Pipeline
     scan_timeout_seconds: int = 300  # 5 minutes
     max_candidates_per_scan: int = 500
+
+    # Map Assistant (LLM) – Google Gemini free tier
+    gemini_api_key: Optional[str] = None  # Google AI Studio key (AIza...); if None, assistant disabled
+    gemini_model: str = "gemini-1.5-flash"  # e.g. gemini-1.5-flash, gemini-1.5-pro
     
     # Logging
     log_level: str = "INFO"

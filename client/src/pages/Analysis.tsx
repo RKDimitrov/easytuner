@@ -20,7 +20,11 @@ import { ChecksumStatus } from '../components/ChecksumStatus'
 import { ChecksumTester } from '../components/ChecksumTester'
 import { ExportDialog } from '../components/ExportDialog'
 import { MapPropertiesDialog } from '../components/MapPropertiesDialog'
+import { MapAssistantPanel, type MapCardItem } from '../components/MapAssistantPanel'
 import { createScan, getScan, getScanResults, type CandidateResponse } from '../services/scanService'
+import { assistantChat } from '../services/assistantService'
+import { buildAssistantPayload } from '../lib/assistantPayload'
+import { useProjectStore } from '../store/projectStore'
 import { applyEdits, type EditOperation, type ChecksumConfig } from '../services/editService'
 import { downloadFile } from '../services/fileService'
 import { validateChecksum, type ChecksumValidationResponse } from '../services/checksumService'
@@ -37,7 +41,8 @@ import {
   Save,
   Shield,
   Map,
-  List
+  List,
+  MessageCircle
 } from 'lucide-react'
 
 export function Analysis() {
@@ -118,6 +123,8 @@ export function Analysis() {
   const [showChecksumDialog, setShowChecksumDialog] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [checksumValidation, setChecksumValidation] = useState<ChecksumValidationResponse | null>(null)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const currentProject = useProjectStore((s) => s.currentProject)
   const [isValidatingChecksum, setIsValidatingChecksum] = useState(false)
   const [showMapPropsDialog, setShowMapPropsDialog] = useState(false)
   /** null = create new; otherwise edit this map (user or analysis) */
@@ -666,6 +673,45 @@ export function Analysis() {
     }
   }
 
+  const handleAssistantSend = async (userMessage: string) => {
+    const payload = buildAssistantPayload({
+      project: currentProject,
+      fileId,
+      fileName,
+      fileSize,
+      scanId,
+      candidates,
+      userMessage,
+    })
+    const res = await assistantChat(payload)
+    return res
+  }
+
+  const handleAskVehicle = () => {
+    setAssistantOpen(false)
+    if (currentProject?.project_id) {
+      navigate(`/projects/${currentProject.project_id}`)
+    }
+  }
+
+  const mapsInContext: MapCardItem[] = candidates.slice(0, 50).map((c) => ({
+    map_id: c.id,
+    type: c.type,
+    dimensions: c.dimensions || { x: 1 },
+    offset_hex: formatHexOffset(c.offset),
+    confidence: typeof c.confidence === 'number' ? c.confidence / 100 : 0,
+    name: c.name ?? null,
+  }))
+
+  const handleOpenMapFromAssistant = (mapId: string) => {
+    const candidate = candidates.find((c) => c.id === mapId) ?? userMaps.find((m) => m.id === mapId)
+    if (candidate) {
+      setSelectedCandidate(candidate)
+      setMapPropsTarget(candidate)
+      setShowMapPropsDialog(true)
+    }
+  }
+
   if (!fileData) {
     return null // Will redirect in useEffect
   }
@@ -1188,6 +1234,26 @@ export function Analysis() {
         }
         fileSize={fileSize}
       />
+
+      {/* Map Assistant chat panel */}
+      <MapAssistantPanel
+        open={assistantOpen}
+        onClose={() => setAssistantOpen(false)}
+        onSendMessage={handleAssistantSend}
+        onAskVehicle={currentProject?.project_id ? handleAskVehicle : undefined}
+        mapsInContext={mapsInContext}
+        onOpenMap={handleOpenMapFromAssistant}
+      />
+
+      {/* FAB: Open Map Assistant */}
+      <Button
+        size="icon"
+        className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-lg z-30"
+        onClick={() => setAssistantOpen(true)}
+        aria-label="Open Map Assistant"
+      >
+        <MessageCircle className="h-5 w-5" />
+      </Button>
     </div>
   )
 }

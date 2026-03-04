@@ -34,9 +34,12 @@ RUN poetry install --no-root
 # Copy application code
 COPY . .
 
+# Entrypoint created inside image (avoids mount/CRLF issues): sync venv with pyproject.toml on startup
+RUN printf '%s\n' '#!/bin/bash' 'set -e' 'if [ -f /app/pyproject.toml ]; then poetry install --no-root --no-interaction; fi' 'exec "$@"' > /docker-entrypoint.dev.sh && chmod +x /docker-entrypoint.dev.sh
+
 # Expose port
 EXPOSE 8000
 
-# Run with auto-reload for development
+ENTRYPOINT ["/docker-entrypoint.dev.sh"]
 CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 

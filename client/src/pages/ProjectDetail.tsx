@@ -63,6 +63,7 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
   const [editName, setEditName] = useState(project.name)
   const [editDescription, setEditDescription] = useState(project.description || '')
   const [editIsPrivate, setEditIsPrivate] = useState(project.is_private)
+  const [editVehicleModel, setEditVehicleModel] = useState(project.vehicle_model ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const isPublished = Boolean(project.published_at)
@@ -72,6 +73,7 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
     setEditName(project.name)
     setEditDescription(project.description || '')
     setEditIsPrivate(project.is_private)
+    setEditVehicleModel(project.vehicle_model ?? '')
     setEditDialogOpen(true)
   }
 
@@ -81,7 +83,8 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
       const updates: UpdateProjectData = {
         name: editName,
         description: editDescription || undefined,
-        is_private: editIsPrivate
+        is_private: editIsPrivate,
+        vehicle_model: editVehicleModel.trim() || null
       }
       await updateProject(project.project_id, updates)
       toast.success('Project updated', {
@@ -157,6 +160,11 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
               </div>
               {project.description && (
                 <p className="text-muted-foreground">{project.description}</p>
+              )}
+              {project.vehicle_model && (
+                <p className="text-sm text-muted-foreground">
+                  Vehicle / ECU: <span className="font-medium text-foreground">{project.vehicle_model}</span>
+                </p>
               )}
               {project.is_private && (
                 <p className="text-sm text-muted-foreground">
@@ -236,6 +244,18 @@ function ProjectHeader({ project, onProjectUpdate, onUploadClick }: { project: P
                 placeholder="Project description (optional)"
                 rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-vehicle-model">Vehicle / ECU model</Label>
+              <Input
+                id="project-vehicle-model"
+                value={editVehicleModel}
+                onChange={(e) => setEditVehicleModel(e.target.value)}
+                placeholder="e.g. BMW N55 2015"
+              />
+              <p className="text-sm text-muted-foreground">
+                Used by the Map Assistant for tuning advice. Leave empty if not applicable.
+              </p>
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">

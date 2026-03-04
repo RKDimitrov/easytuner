@@ -9,6 +9,7 @@ export interface Project {
   name: string
   description: string | null
   is_private: boolean
+  vehicle_model?: string | null
   published_at: string | null
   created_at: string
   updated_at: string
@@ -25,6 +26,7 @@ export interface UpdateProjectData {
   name?: string
   description?: string
   is_private?: boolean
+  vehicle_model?: string | null
 }
 
 export interface ProjectsResponse {

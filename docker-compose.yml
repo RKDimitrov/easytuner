@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-easytuner}
       POSTGRES_USER: ${POSTGRES_USER:-easytuner}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-easytuner_password}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "127.0.0.1:5432:5432"
@@ -26,13 +26,13 @@ services:
     image: redis:7-alpine
     container_name: easytuner-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -48,11 +48,11 @@ services:
     restart: unless-stopped
     command: poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-easytuner}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-easytuner}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-easytuner}:${POSTGRES_PASSWORD:-easytuner_password}@postgres:5432/${POSTGRES_DB:-easytuner}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
       - ENVIRONMENT=development
       - DEBUG=true
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-change-in-production}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173","https://easytuner.me","https://www.easytuner.me","https://easytuner.vercel.app"]}
       - CORS_ALLOW_CREDENTIALS=true
       - CORS_ALLOW_METHODS=["*"]
