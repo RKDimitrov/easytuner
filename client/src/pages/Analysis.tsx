@@ -29,6 +29,7 @@ import { applyEdits, type EditOperation, type ChecksumConfig } from '../services
 import { downloadFile } from '../services/fileService'
 import { validateChecksum, type ChecksumValidationResponse } from '../services/checksumService'
 import { useIsMobile } from '../hooks/use-mobile'
+import { cn } from '../lib/utils'
 import { 
   FileCode, 
   Play, 
@@ -846,16 +847,37 @@ export function Analysis() {
                 <span className="hidden md:inline">Make a map</span>
                 <span className="md:hidden">Map</span>
               </Button>
+
+              <Button
+                variant={assistantOpen ? "secondary" : "outline"}
+                size={isMobile ? "sm" : "default"}
+                onClick={() => setAssistantOpen(!assistantOpen)}
+                className="flex-1 md:flex-initial ml-auto"
+              >
+                <MessageCircle className="w-4 h-4 md:mr-2" />
+                <span className="hidden md:inline">Map Assistant</span>
+                <span className="md:hidden">AI</span>
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main content: always two columns – left = status/results, right = viewer */}
-      <div className="container mx-auto px-4 py-6 space-y-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left column: Not scanned / Scan progress / My Maps + Analysis Results */}
-          <div className="flex flex-col gap-6 min-h-[400px] lg:h-[calc(100vh-200px)]">
+      {/* Main content: when closed = same width as buttons (aligns); when assistant open = wider area so all three sections expand, with smooth left-column animation */}
+      <div
+        className={cn(
+          'mx-auto px-4 py-6 space-y-4 transition-[max-width] duration-300 ease-out',
+          assistantOpen ? 'container max-w-[1600px]' : 'container'
+        )}
+      >
+        <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+          {/* Left column: 50% when closed (matches buttons), animates to 360px when assistant opens */}
+          <div
+            className={cn(
+              'flex flex-col gap-6 min-h-[400px] lg:h-[calc(100vh-200px)] flex-shrink-0 transition-[width] duration-300 ease-out',
+              assistantOpen ? 'lg:w-[360px]' : 'lg:w-1/2'
+            )}
+          >
             {isScanning ? (
               <Card className="shrink-0">
                 <CardContent className="pt-6 pb-6">
@@ -1005,8 +1027,8 @@ export function Analysis() {
               </div>
             </div>
 
-            {/* Right column: Viewer (Hex | Text | 3D) */}
-            <Card className="min-h-[400px] lg:h-[calc(100vh-200px)] flex flex-col">
+          {/* Middle column: Hex / Text / 3D viewer – takes remaining space (not squished) */}
+          <Card className="flex-1 min-w-0 min-h-[400px] lg:h-[calc(100vh-200px)] flex flex-col">
               <CardContent className="flex-1 overflow-hidden p-0">
                 <Tabs 
                   value={viewMode} 
@@ -1130,8 +1152,29 @@ export function Analysis() {
                   </TabsContent>
                 </Tabs>
               </CardContent>
-            </Card>
+          </Card>
+
+          {/* Third column: Map Assistant – slides in with width + opacity animation */}
+          <div
+            className={cn(
+              'overflow-hidden flex-shrink-0 transition-[width,opacity] duration-300 ease-out',
+              assistantOpen ? 'w-full lg:w-[360px] opacity-100' : 'w-0 opacity-0'
+            )}
+            style={{ minWidth: assistantOpen ? undefined : 0 }}
+          >
+            <div className="w-[360px] max-w-full h-full min-h-[400px] lg:min-h-[calc(100vh-200px)] lg:h-[calc(100vh-200px)] transition-opacity duration-300">
+              <MapAssistantPanel
+                open={assistantOpen}
+                inline
+                onClose={() => setAssistantOpen(false)}
+                onSendMessage={handleAssistantSend}
+                onAskVehicle={currentProject?.project_id ? handleAskVehicle : undefined}
+                mapsInContext={mapsInContext}
+                onOpenMap={handleOpenMapFromAssistant}
+              />
+            </div>
           </div>
+        </div>
 
         {/* Checksum Section - Below Analysis and Viewer */}
         {fileId && (
@@ -1235,25 +1278,6 @@ export function Analysis() {
         fileSize={fileSize}
       />
 
-      {/* Map Assistant chat panel */}
-      <MapAssistantPanel
-        open={assistantOpen}
-        onClose={() => setAssistantOpen(false)}
-        onSendMessage={handleAssistantSend}
-        onAskVehicle={currentProject?.project_id ? handleAskVehicle : undefined}
-        mapsInContext={mapsInContext}
-        onOpenMap={handleOpenMapFromAssistant}
-      />
-
-      {/* FAB: Open Map Assistant */}
-      <Button
-        size="icon"
-        className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-lg z-30"
-        onClick={() => setAssistantOpen(true)}
-        aria-label="Open Map Assistant"
-      >
-        <MessageCircle className="h-5 w-5" />
-      </Button>
     </div>
   )
 }
