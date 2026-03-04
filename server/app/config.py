@@ -97,9 +97,9 @@ class Settings(BaseSettings):
     scan_timeout_seconds: int = 300  # 5 minutes
     max_candidates_per_scan: int = 500
 
-    # Map Assistant (LLM) – Google Gemini free tier
-    gemini_api_key: Optional[str] = None  # Google AI Studio key (AIza...); if None, assistant disabled
-    gemini_model: str = "gemini-1.5-flash"  # e.g. gemini-1.5-flash, gemini-1.5-pro
+    # Map Assistant (LLM) – OpenAI
+    openai_api_key: Optional[str] = None  # https://platform.openai.com/api-keys; if None, assistant disabled
+    openai_model: str = "gpt-4o-mini"  # e.g. gpt-4o-mini, gpt-4o
     
     # Logging
     log_level: str = "INFO"

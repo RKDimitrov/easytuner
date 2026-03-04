@@ -78,27 +78,36 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
     userMessage,
   } = input
 
-  const projectContext: ProjectContextPayload = {
-    summary: project
-      ? `${project.name}: ${fileName || 'firmware analysis'}`
-      : fileName
-        ? `Firmware analysis: ${fileName}`
-        : 'Firmware analysis',
-    vehicle_model: project?.vehicle_model ?? null,
-    intent: null,
-  }
-
+  // Only include files in scanned_files when a scan has actually been run (scanId present).
+  // Otherwise the AI would say "the file has been scanned" when the user hasn't run a scan.
   const scannedFiles: ScannedFileEntryPayload[] = []
-  if (fileId && fileName) {
+  if (fileId && fileName && scanId) {
     scannedFiles.push({
       file_id: fileId,
       filename: fileName,
       size_bytes: fileSize,
       project_name: project?.name ?? 'Unknown',
-      scan_id: scanId ?? null,
+      scan_id: scanId,
       candidates_count: candidates.length,
       summary: null,
     })
+  }
+
+  const currentFileNote =
+    fileId && fileName
+      ? scanId
+        ? `Current file: ${fileName} (scan completed, ${candidates.length} map(s) found).`
+        : `Current file: ${fileName} (not yet scanned — run a scan to detect calibration maps).`
+      : null
+
+  const projectContext: ProjectContextPayload = {
+    summary: project
+      ? currentFileNote
+        ? `${project.name}. ${currentFileNote}`
+        : `${project.name}: ${fileName || 'firmware analysis'}`
+      : currentFileNote ?? (fileName ? `Firmware analysis: ${fileName}` : 'Firmware analysis'),
+    vehicle_model: project?.vehicle_model ?? null,
+    intent: null,
   }
 
   const capped = candidates.slice(0, MAX_MAPS_IN_PAYLOAD)

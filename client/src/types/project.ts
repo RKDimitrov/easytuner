@@ -20,6 +20,7 @@ export interface CreateProjectData {
   name: string
   description?: string
   is_private?: boolean
+  vehicle_model: string
 }
 
 export interface UpdateProjectData {

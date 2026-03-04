@@ -29,6 +29,7 @@ class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
     is_private: bool = True
+    vehicle_model: str
 
 
 class ProjectUpdate(BaseModel):
@@ -382,7 +383,8 @@ async def create_project(
             owner_user_id=current_user.user_id,
             name=project_data.name,
             description=project_data.description,
-            is_private=project_data.is_private
+            is_private=project_data.is_private,
+            vehicle_model=project_data.vehicle_model,
         )
         
         db.add(project)

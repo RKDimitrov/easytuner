@@ -45,7 +45,10 @@ const projectSchema = z.object({
     .max(500, 'Description must be less than 500 characters')
     .optional()
     .or(z.literal('')),
-  is_private: z.boolean().default(true)
+  is_private: z.boolean().default(true),
+  vehicle_model: z.string()
+    .min(1, 'Vehicle / engine model is required')
+    .max(200, 'Vehicle model must be less than 200 characters'),
 })
 
 type ProjectFormData = z.infer<typeof projectSchema>
@@ -81,7 +84,8 @@ export function CreateProjectModal({
     defaultValues: {
       name: '',
       description: '',
-      is_private: true
+      is_private: true,
+      vehicle_model: '',
     }
   })
 
@@ -92,12 +96,14 @@ export function CreateProjectModal({
       setValue('name', project.name)
       setValue('description', project.description || '')
       setValue('is_private', project.is_private)
+      setValue('vehicle_model', project.vehicle_model || '')
     } else if (open && !project) {
       // Create mode - reset to defaults
       reset({
         name: '',
         description: '',
-        is_private: true
+        is_private: true,
+        vehicle_model: '',
       })
     }
   }, [open, project, setValue, reset])
@@ -106,13 +112,17 @@ export function CreateProjectModal({
   const onSubmit = async (data: ProjectFormData) => {
     setIsLoading(true)
     try {
+      const payload = {
+        ...data,
+        vehicle_model: data.vehicle_model.trim(),
+      }
       if (isEditing && project) {
-        await updateProject(project.project_id, data)
+        await updateProject(project.project_id, payload)
         success('Project updated', {
           description: 'Your project has been updated successfully.'
         })
       } else {
-        await createProject(data)
+        await createProject(payload)
         success('Project created', {
           description: 'Your new project has been created successfully.'
         })
@@ -203,6 +213,23 @@ export function CreateProjectModal({
               />
               {errors.description && (
                 <p className="text-sm text-destructive">{errors.description.message}</p>
+              )}
+            </div>
+
+            {/* Vehicle / engine model (for Map Assistant tuning suggestions) */}
+            <div className="space-y-2">
+              <Label htmlFor="vehicle_model">Vehicle / engine model *</Label>
+              <Input
+                id="vehicle_model"
+                placeholder="e.g., BMW N55 2015"
+                {...register('vehicle_model')}
+                disabled={isLoading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Required. Used by the Map Assistant for tuning suggestions.
+              </p>
+              {errors.vehicle_model && (
+                <p className="text-sm text-destructive">{errors.vehicle_model.message}</p>
               )}
             </div>
 

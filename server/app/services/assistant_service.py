@@ -1,8 +1,6 @@
 """
-Map Assistant service: build prompt from request and call Google Gemini to produce structured response.
-Uses Gemini free tier (Google AI Studio API key).
+Map Assistant service: build prompt from request and call OpenAI to produce structured response.
 """
-import asyncio
 import json
 import logging
 
@@ -35,25 +33,10 @@ def _build_user_message(req: AssistantChatRequest) -> str:
     return json.dumps(payload, indent=2)
 
 
-def _call_gemini_sync(api_key: str, model_name: str, full_prompt: str) -> str:
-    """Synchronous Gemini call (run in thread to not block event loop)."""
-    import google.generativeai as genai
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-    response = model.generate_content(
-        full_prompt,
-        generation_config={"temperature": 0.3},
-    )
-    if not response or not response.text:
-        raise ValueError("Gemini returned empty response")
-    return response.text.strip()
-
-
 async def chat(req: AssistantChatRequest) -> AssistantChatResponse:
     """
-    Call Google Gemini with the request payload and return a structured AssistantChatResponse.
-    If GEMINI_API_KEY is not set, returns a fallback response indicating the assistant is unavailable.
+    Call OpenAI with the request payload and return a structured AssistantChatResponse.
+    If OPENAI_API_KEY is not set, returns a fallback response indicating the assistant is unavailable.
     """
     from app.config import settings
 
@@ -64,36 +47,44 @@ async def chat(req: AssistantChatRequest) -> AssistantChatResponse:
         len(req.scanned_files),
     )
 
-    if not settings.gemini_api_key or not settings.gemini_api_key.strip():
-        logger.warning("Map Assistant: GEMINI_API_KEY is not set or empty")
+    if not settings.openai_api_key or not settings.openai_api_key.strip():
+        logger.warning("Map Assistant: OPENAI_API_KEY is not set or empty")
         return AssistantChatResponse(
-            summary="The Map Assistant is not configured. Set GEMINI_API_KEY in server .env (get a free key at https://aistudio.google.com/app/apikey).",
+            summary="The Map Assistant is not configured. Set OPENAI_API_KEY in server .env (get a key at https://platform.openai.com/api-keys).",
             issues=[],
             suggestions=[],
             ask_vehicle=None,
         )
 
     try:
-        import google.generativeai as genai
+        from openai import AsyncOpenAI
     except ImportError as e:
-        logger.exception("Map Assistant: google-generativeai not installed: %s", e)
+        logger.exception("Map Assistant: openai package not installed: %s", e)
         return AssistantChatResponse(
-            summary="The Map Assistant is not available: install google-generativeai on the server (pip install google-generativeai).",
+            summary="The Map Assistant is not available: install openai on the server (pip install openai).",
             issues=[],
             suggestions=[],
             ask_vehicle=None,
         )
 
-    full_prompt = f"{SYSTEM_PROMPT}\n\n---\n\nUser request and context (JSON):\n{_build_user_message(req)}"
+    user_content = _build_user_message(req)
+    full_prompt = f"User request and context (JSON):\n{user_content}"
 
     try:
-        logger.debug("Map Assistant: calling Gemini model=%s", settings.gemini_model)
-        content = await asyncio.to_thread(
-            _call_gemini_sync,
-            settings.gemini_api_key.strip(),
-            settings.gemini_model,
-            full_prompt,
+        logger.debug("Map Assistant: calling OpenAI model=%s", settings.openai_model)
+        client = AsyncOpenAI(api_key=settings.openai_api_key.strip())
+        response = await client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": full_prompt},
+            ],
+            temperature=0.3,
         )
+        content = (response.choices[0].message.content or "").strip()
+        if not content:
+            raise ValueError("OpenAI returned empty response")
+
         # Remove markdown code block if present
         if content.startswith("```"):
             lines = content.split("\n")
@@ -128,14 +119,12 @@ async def chat(req: AssistantChatRequest) -> AssistantChatResponse:
             err_msg,
         )
         lower_msg = err_msg.lower()
-        if "api_key" in lower_msg or "authentication" in lower_msg or "invalid" in lower_msg or "401" in err_msg:
-            user_summary = "The Map Assistant could not authenticate with Gemini. Check that GEMINI_API_KEY in server .env is correct (get a free key at https://aistudio.google.com/app/apikey)."
-        elif err_name == "NotFound" or ("models/" in lower_msg and "not found" in lower_msg):
-            user_summary = "The configured Gemini model is not available for your API key. Set GEMINI_MODEL in server .env to a model your key has access to (copy the model ID from Google AI Studio) and restart the server."
+        if "api_key" in lower_msg or "authentication" in lower_msg or "invalid" in lower_msg or "401" in err_msg or "incorrect api key" in lower_msg:
+            user_summary = "The Map Assistant could not authenticate with OpenAI. Check that OPENAI_API_KEY in server .env is correct (https://platform.openai.com/api-keys)."
         elif "rate" in lower_msg or "quota" in lower_msg or "429" in err_msg:
-            user_summary = "Gemini rate limit exceeded. Please try again in a moment."
+            user_summary = "OpenAI rate limit exceeded. Please try again in a moment."
         elif "connection" in lower_msg or "timeout" in lower_msg or "network" in lower_msg:
-            user_summary = "The Map Assistant could not reach Gemini. Check the server network connection."
+            user_summary = "The Map Assistant could not reach OpenAI. Check the server network connection."
         else:
             user_summary = "The Map Assistant encountered an error. Please try again later. (Server logs have details.)"
         return AssistantChatResponse(
