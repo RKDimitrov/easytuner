@@ -67,6 +67,8 @@ export interface AssistantChatRequestPayload {
   user_message: string
   /** Exact Text Viewer table for the currently selected map (axis labels + data grid). Sent so the AI can give step-by-step instructions (e.g. "change the value at 4.5k RPM to X"). */
   selected_map_text_view?: string | null
+  /** Text Viewer tables for all scanned maps (so the AI can say what each result relates to—e.g. torque limiter, fuel map, boost). Capped in size for token limits. */
+  all_maps_text_views?: string | null
 }
 
 export interface AssistantChatResponsePayload {

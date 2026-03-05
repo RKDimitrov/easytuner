@@ -29,6 +29,8 @@ export interface BuildPayloadInput {
   userMessage: string
   /** Text Viewer table for the currently selected map (so the AI can reference exact values and give step-by-step edit instructions). */
   selectedMapTextView?: string | null
+  /** Text Viewer tables for multiple scanned maps (so the AI can identify what each map relates to). Built from getMapTableAsText for each candidate; capped by caller. */
+  allMapsTextViews?: string | null
 }
 
 /**
@@ -39,7 +41,7 @@ function mapCandidateToEntry(
   fileId: string,
   scanId: string
 ): MapEntryPayload {
-  const dims = c.dimensions || {}
+  const dims: { x?: number; y?: number; z?: number } = c.dimensions || {}
   const dimensions: Record<string, number> = {}
   if (dims.x !== undefined) dimensions.x = dims.x
   if (dims.y !== undefined) dimensions.y = dims.y
@@ -79,6 +81,7 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
     candidates,
     userMessage,
     selectedMapTextView,
+    allMapsTextViews,
   } = input
 
   // Only include files in scanned_files when a scan has actually been run (scanId present).
@@ -126,6 +129,9 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
   }
   if (selectedMapTextView != null && selectedMapTextView !== '') {
     payload.selected_map_text_view = selectedMapTextView
+  }
+  if (allMapsTextViews != null && allMapsTextViews !== '') {
+    payload.all_maps_text_views = allMapsTextViews
   }
   return payload
 }

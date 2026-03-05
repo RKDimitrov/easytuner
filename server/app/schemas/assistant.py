@@ -83,6 +83,10 @@ class AssistantChatRequest(BaseModel):
         default=None,
         description="Exact Text Viewer table for the currently selected map (axis labels + data grid). Use it to give step-by-step instructions (e.g. open Text Viewer, change the value at 4.5k RPM to X).",
     )
+    all_maps_text_views: Optional[str] = Field(
+        default=None,
+        description="Text Viewer tables for multiple scanned maps (one block per map with offset, axes, and data). Use it when the user asks what the other scan results are or what each map relates to—infer purpose from dimensions, axis ranges, and value patterns (e.g. torque limiter, fuel map, boost limit).",
+    )
 
 
 # --- Assistant chat response ---

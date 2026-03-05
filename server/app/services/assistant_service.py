@@ -20,7 +20,8 @@ Response structure:
 4. ask_vehicle: Only when the user asks for tuning but vehicle_model is missing: one short sentence asking for vehicle/ECU (e.g. "Which vehicle or ECU is this for? (e.g. Peugeot 206 2.0 HDI 2002)."). Otherwise null.
 
 Rules:
-- Use project_context, scanned_files, maps, and user_message. When selected_map_text_view is present, it is the exact Text Viewer table (axis labels + data grid). All suggested values and column/row references must come from that table.
+- Use project_context, scanned_files, maps, and user_message. When selected_map_text_view is present, it is the exact Text Viewer table for the map the user has selected. All suggested values and column/row references must come from that table.
+- When all_maps_text_views is present, it contains the Text Viewer table (axis labels + data grid) for multiple scanned maps, each under a "--- Map: name (type, offset, dimensions) ---" header. If the user asks what the other scan results are, what each map is, or what they relate to, you MUST use all_maps_text_views: look at each map's axes (e.g. RPM, load), dimensions, value ranges and patterns, and say what each likely is (e.g. "0x683CC: 2D 6×7, RPM vs load—likely fuel or torque map"; "0x64020: 2D 17×1—likely RPM-based limit or limiter"). List or describe each scanned map the user cares about. Do not say you don't have that information when all_maps_text_views is provided.
 - For tuning or edit suggestions, only answer with concrete steps if project_context.vehicle_model is set. If the user asks to tune but vehicle_model is null or empty, set ask_vehicle to the one-sentence question above and leave suggestions minimal or empty.
 - Respond with a JSON object only, no markdown or extra text. Use this exact shape:
 {"summary": "2-5 sentences: how the map works, how it is made.", "issues": ["issue or empty list"], "suggestions": ["Step 1: exact action and value", "Step 2: ..."], "ask_vehicle": null or "one sentence"}
@@ -37,6 +38,8 @@ def _build_user_message(req: AssistantChatRequest) -> str:
     }
     if req.selected_map_text_view and req.selected_map_text_view.strip():
         payload["selected_map_text_view"] = req.selected_map_text_view.strip()
+    if req.all_maps_text_views and req.all_maps_text_views.strip():
+        payload["all_maps_text_views"] = req.all_maps_text_views.strip()
     return json.dumps(payload, indent=2)
 
 

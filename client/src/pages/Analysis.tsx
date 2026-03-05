@@ -672,12 +672,28 @@ export function Analysis() {
       ...candidates.filter((c) => !userMaps.some((m) => m.id === c.id)),
     ]
 
-    // Include the Text Viewer table for the selected map so the AI can give step-by-step edit instructions
+    // Include the Text Viewer table for the selected map and for all scanned maps so the AI can give step-by-step instructions and say what each result relates to
     const displayData = modifiedFileData ?? fileData ?? null
     const selectedMapTextView =
       selectedCandidate && displayData
         ? getMapTableAsText(selectedCandidate, displayData)
         : null
+
+    const MAX_MAPS_FOR_TEXT_VIEWS = 15
+    let allMapsTextViews: string | null = null
+    if (displayData) {
+      const parts: string[] = []
+      for (const c of combinedMaps.slice(0, MAX_MAPS_FOR_TEXT_VIEWS)) {
+        const tableText = getMapTableAsText(c, displayData)
+        const header = `--- Map: ${c.name || c.id} (${c.type}, offset ${formatHexOffset(c.offset)}, ${(c.dimensions?.x ?? 0)}×${(c.dimensions?.y ?? 0)}) ---`
+        if (tableText) {
+          parts.push(`${header}\n${tableText}`)
+        } else {
+          parts.push(header + '\n(No table data — dimensions or data not available for text view)')
+        }
+      }
+      if (parts.length > 0) allMapsTextViews = parts.join('\n\n')
+    }
 
     const payload = buildAssistantPayload({
       project: currentProject,
@@ -688,6 +704,7 @@ export function Analysis() {
       candidates: combinedMaps,
       userMessage,
       selectedMapTextView: selectedMapTextView ?? undefined,
+      allMapsTextViews: allMapsTextViews ?? undefined,
     })
     const res = await assistantChat(payload)
     return res
