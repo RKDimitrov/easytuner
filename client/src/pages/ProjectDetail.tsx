@@ -1031,7 +1031,7 @@ export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const { setFileData, setCandidates, setScanId, setIsScanning: setIsActivelyScanningMain } = useAnalysisStore()
-  const { projects, isLoading, fetchProjects } = useProjectStore()
+  const { projects, isLoading, fetchProjects, setCurrentProject } = useProjectStore()
   const [project, setProject] = useState<Project | null>(null)
   usePageTitle(project ? project.name : 'Project')
   const [projectLoading, setProjectLoading] = useState(true)
@@ -1068,6 +1068,8 @@ export function ProjectDetail() {
         setCandidates([])
         setScanId(null)
       }
+      // Make this project available to the Analysis page (Map Assistant, etc.)
+      setCurrentProject(project)
       navigate('/analysis')
     } catch (error) {
       console.error('Failed to open file:', error)
@@ -1086,6 +1088,7 @@ export function ProjectDetail() {
       const foundProject = state.projects.find(p => p.project_id === projectId)
       if (foundProject) {
         setProject(foundProject)
+        setCurrentProject(foundProject)
       }
     }
   }
@@ -1103,6 +1106,7 @@ export function ProjectDetail() {
       const foundProject = projects.find(p => p.project_id === projectId)
       if (foundProject) {
         setProject(foundProject)
+        setCurrentProject(foundProject)
       } else {
         // Project not found - could be 404 or access denied
         console.error('Project not found:', projectId)

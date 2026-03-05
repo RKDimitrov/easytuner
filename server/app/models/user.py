@@ -144,6 +144,13 @@ class User(Base, TimestampMixin):
         doc="Exports requested by the user",
     )
 
+    user_maps: Mapped[list["UserMap"]] = relationship(
+        "UserMap",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        doc="User-defined maps created by the user",
+    )
+
     # Indexes
     __table_args__ = (
         Index("idx_users_email", "email"),

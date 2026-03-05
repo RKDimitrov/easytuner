@@ -79,20 +79,27 @@ class AssistantChatRequest(BaseModel):
         description="ECU map/table objects (current file or selected). Cap length for token limits.",
     )
     user_message: str = Field(..., description="User question or instruction from the chat input")
+    selected_map_text_view: Optional[str] = Field(
+        default=None,
+        description="Exact Text Viewer table for the currently selected map (axis labels + data grid). Use it to give step-by-step instructions (e.g. open Text Viewer, change the value at 4.5k RPM to X).",
+    )
 
 
 # --- Assistant chat response ---
 class AssistantChatResponse(BaseModel):
     """Structured response from the Map Assistant."""
 
-    summary: str = Field(..., description="1–3 sentence summary of the answer")
+    summary: str = Field(
+        ...,
+        description="Explanation of how the map works and how it is structured (2–5 sentences); then context for the user's situation.",
+    )
     issues: List[str] = Field(
         default_factory=list,
         description="Bullet list of issues or gaps, if any",
     )
     suggestions: List[str] = Field(
         default_factory=list,
-        description="Improvement suggestions with references to map_id or file names",
+        description="Step-by-step instructions with exact values from the user's table (e.g. 'At 4530 RPM set to 6000', 'Set next column to 4531 RPM and value to 0').",
     )
     ask_vehicle: Optional[str] = Field(
         default=None,

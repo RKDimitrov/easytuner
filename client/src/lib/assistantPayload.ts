@@ -27,6 +27,8 @@ export interface BuildPayloadInput {
   /** Map candidates (e.g. from analysis store); will be capped */
   candidates: MapCandidate[]
   userMessage: string
+  /** Text Viewer table for the currently selected map (so the AI can reference exact values and give step-by-step edit instructions). */
+  selectedMapTextView?: string | null
 }
 
 /**
@@ -76,6 +78,7 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
     scanId,
     candidates,
     userMessage,
+    selectedMapTextView,
   } = input
 
   // Only include files in scanned_files when a scan has actually been run (scanId present).
@@ -115,10 +118,14 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
     mapCandidateToEntry(c, fileId ?? '', scanId ?? '')
   )
 
-  return {
+  const payload: AssistantChatRequestPayload = {
     project_context: projectContext,
     scanned_files: scannedFiles,
     maps,
     user_message: userMessage,
   }
+  if (selectedMapTextView != null && selectedMapTextView !== '') {
+    payload.selected_map_text_view = selectedMapTextView
+  }
+  return payload
 }

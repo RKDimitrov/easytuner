@@ -119,6 +119,13 @@ class FirmwareFile(Base, TimestampMixin):
         doc="Scan jobs for this firmware file",
     )
 
+    user_maps: Mapped[list["UserMap"]] = relationship(
+        "UserMap",
+        back_populates="file",
+        cascade="all, delete-orphan",
+        doc="User-defined maps associated with this file",
+    )
+
     # Indexes
     __table_args__ = (
         Index("idx_firmware_files_project_id", "project_id"),

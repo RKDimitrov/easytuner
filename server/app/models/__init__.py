@@ -10,6 +10,7 @@ from app.models.project import Project
 from app.models.scan_job import ScanJob
 from app.models.session import Session
 from app.models.user import User
+from app.models.user_map import UserMap
 
 __all__ = [
     "TimestampMixin",
@@ -22,4 +23,5 @@ __all__ = [
     "Annotation",
     "AuditLog",
     "Export",
+    "UserMap",
 ]

@@ -65,6 +65,8 @@ export interface AssistantChatRequestPayload {
   scanned_files: ScannedFileEntryPayload[]
   maps: MapEntryPayload[]
   user_message: string
+  /** Exact Text Viewer table for the currently selected map (axis labels + data grid). Sent so the AI can give step-by-step instructions (e.g. "change the value at 4.5k RPM to X"). */
+  selected_map_text_view?: string | null
 }
 
 export interface AssistantChatResponsePayload {

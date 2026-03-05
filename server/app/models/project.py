@@ -118,6 +118,13 @@ class Project(Base, TimestampMixin):
         doc="Exports generated for this project",
     )
 
+    user_maps: Mapped[list["UserMap"]] = relationship(
+        "UserMap",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        doc="User-defined maps associated with this project",
+    )
+
     # Indexes
     __table_args__ = (
         Index("idx_projects_owner_user_id", "owner_user_id"),

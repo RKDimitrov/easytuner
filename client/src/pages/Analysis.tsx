@@ -24,11 +24,13 @@ import { MapAssistantPanel, type MapCardItem } from '../components/MapAssistantP
 import { createScan, getScan, getScanResults, type CandidateResponse } from '../services/scanService'
 import { assistantChat } from '../services/assistantService'
 import { buildAssistantPayload } from '../lib/assistantPayload'
+import { getMapTableAsText } from '../lib/mapTableView'
 import { useProjectStore } from '../store/projectStore'
 import { applyEdits, type EditOperation, type ChecksumConfig } from '../services/editService'
 import { downloadFile } from '../services/fileService'
 import { validateChecksum, type ChecksumValidationResponse } from '../services/checksumService'
 import { useIsMobile } from '../hooks/use-mobile'
+import { fetchUserMapsForFile, saveUserMapForFile } from '../services/userMapService'
 import { cn } from '../lib/utils'
 import { 
   FileCode, 
@@ -82,6 +84,7 @@ export function Analysis() {
   const clearEdits = useEditStore((state) => state.clearEdits)
   const resetEdits = useEditStore((state) => state.reset)
   const setEditFile = useEditStore((state) => state.setFile)
+  const modifiedFileData = useEditStore((state) => state.modifiedFileData)
   
   // Initialize edit store when file data is available
   useEffect(() => {
@@ -90,30 +93,18 @@ export function Analysis() {
     }
   }, [fileData, fileId, setEditFile])
 
-  // Persist "My Maps" per file: load when file is selected
-  const USER_MAPS_STORAGE_KEY = 'easytuner-user-maps'
+  // Load user-created maps (My Maps) from the server when a file is selected
   useEffect(() => {
     if (!fileId) return
-    try {
-      const raw = localStorage.getItem(`${USER_MAPS_STORAGE_KEY}-${fileId}`)
-      if (raw) {
-        const parsed = JSON.parse(raw) as MapCandidate[]
-        if (Array.isArray(parsed)) setUserMaps(parsed)
+    ;(async () => {
+      try {
+        const maps = await fetchUserMapsForFile(fileId)
+        setUserMaps(maps)
+      } catch (error) {
+        console.error('Failed to load user maps for file', fileId, error)
       }
-    } catch {
-      // ignore invalid stored data
-    }
+    })()
   }, [fileId, setUserMaps])
-
-  // Save "My Maps" to localStorage whenever they change (for current file)
-  useEffect(() => {
-    if (!fileId) return
-    try {
-      localStorage.setItem(`${USER_MAPS_STORAGE_KEY}-${fileId}`, JSON.stringify(userMaps))
-    } catch {
-      // ignore quota or serialization errors
-    }
-  }, [fileId, userMaps])
 
   const [scanComplete, setScanComplete] = useState(false)
   const [viewMode, setViewMode] = useState<'hex' | 'text' | '3d'>('hex')
@@ -675,14 +666,28 @@ export function Analysis() {
   }
 
   const handleAssistantSend = async (userMessage: string) => {
+    // Prefer user-created maps first, then backend candidates (no duplicates)
+    const combinedMaps: MapCandidate[] = [
+      ...userMaps,
+      ...candidates.filter((c) => !userMaps.some((m) => m.id === c.id)),
+    ]
+
+    // Include the Text Viewer table for the selected map so the AI can give step-by-step edit instructions
+    const displayData = modifiedFileData ?? fileData ?? null
+    const selectedMapTextView =
+      selectedCandidate && displayData
+        ? getMapTableAsText(selectedCandidate, displayData)
+        : null
+
     const payload = buildAssistantPayload({
       project: currentProject,
       fileId,
       fileName,
       fileSize,
       scanId,
-      candidates,
+      candidates: combinedMaps,
       userMessage,
+      selectedMapTextView: selectedMapTextView ?? undefined,
     })
     const res = await assistantChat(payload)
     return res
@@ -695,7 +700,14 @@ export function Analysis() {
     }
   }
 
-  const mapsInContext: MapCardItem[] = candidates.slice(0, 50).map((c) => ({
+  // Maps shown as small cards in the assistant, mirroring what we send to the AI.
+  // User-created maps come first so the assistant focuses on them.
+  const mapsForAssistant: MapCandidate[] = [
+    ...userMaps,
+    ...candidates.filter((c) => !userMaps.some((m) => m.id === c.id)),
+  ]
+
+  const mapsInContext: MapCardItem[] = mapsForAssistant.slice(0, 50).map((c) => ({
     map_id: c.id,
     type: c.type,
     dimensions: c.dimensions || { x: 1 },
@@ -1253,22 +1265,36 @@ export function Analysis() {
           setShowMapPropsDialog(false)
           setMapPropsTarget(null)
         }}
-        onSave={(map) => {
-          if (mapPropsTarget === 'new' || mapPropsTarget === null) {
-            addUserMap(map)
-            setSelectedCandidate({ ...map, id: map.id, confidence: 100 })
-            toast.success('Map created', { description: map.name || 'Custom map added to My Maps.' })
-          } else if (userMaps.some((m) => m.id === mapPropsTarget.id)) {
-            updateUserMap(map.id, map)
-            setSelectedCandidate(map)
-            toast.success('Map updated', { description: 'Map properties saved.' })
-          } else {
-            updateCandidate(map.id, map)
-            setSelectedCandidate(map)
-            toast.success('Map updated', { description: 'Analysis map properties saved.' })
+        onSave={async (map) => {
+          try {
+            let saved = map
+            if (fileId) {
+              // Persist user maps on the server; analysis candidates remain local-only.
+              saved = await saveUserMapForFile(fileId, map)
+            }
+
+            if (mapPropsTarget === 'new' || mapPropsTarget === null) {
+              addUserMap(saved)
+              setSelectedCandidate({ ...saved, id: saved.id, confidence: 100 })
+              toast.success('Map created', { description: saved.name || 'Custom map added to My Maps.' })
+            } else if (userMaps.some((m) => m.id === mapPropsTarget.id)) {
+              updateUserMap(saved.id, saved)
+              setSelectedCandidate(saved)
+              toast.success('Map updated', { description: 'Map properties saved.' })
+            } else {
+              updateCandidate(saved.id, saved)
+              setSelectedCandidate(saved)
+              toast.success('Map updated', { description: 'Analysis map properties saved.' })
+            }
+          } catch (error) {
+            console.error('Failed to save user map', error)
+            toast.error('Failed to save map', {
+              description: error instanceof Error ? error.message : 'Unknown error while saving map',
+            })
+          } finally {
+            setShowMapPropsDialog(false)
+            setMapPropsTarget(null)
           }
-          setShowMapPropsDialog(false)
-          setMapPropsTarget(null)
         }}
         initialMap={
           showMapPropsDialog && mapPropsTarget !== null && mapPropsTarget !== 'new'
