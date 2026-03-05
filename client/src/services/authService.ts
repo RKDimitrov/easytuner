@@ -51,6 +51,71 @@ export async function getCurrentUser(accessToken: string): Promise<User> {
 }
 
 /**
+ * Build full URL for user avatar image (for use in img src).
+ * Returns null if user has no avatar_url.
+ */
+export function getAvatarUrl(avatarUrl: string | null | undefined): string | null {
+  if (!avatarUrl) return null
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  return `${base}/api/v1/auth/avatars/${avatarUrl}`
+}
+
+/**
+ * Update current user profile (e.g. display name).
+ */
+export async function updateProfile(
+  accessToken: string,
+  data: { displayName?: string | null }
+): Promise<User> {
+  const response = await axios.patch<User>(
+    `${AUTH_API}/me`,
+    { display_name: data.displayName ?? null },
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  )
+  return response.data
+}
+
+/** Max avatar file size (2 MB) for client-side validation */
+export const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024
+
+/** Allowed avatar MIME types */
+export const AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp'
+
+/**
+ * Upload or replace current user's profile picture.
+ */
+export async function uploadAvatar(
+  accessToken: string,
+  file: File
+): Promise<User> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await axios.post<User>(`${AUTH_API}/me/avatar`, formData, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response.data
+}
+
+/**
+ * Remove current user's profile picture.
+ */
+export async function removeAvatar(accessToken: string): Promise<User> {
+  const response = await axios.delete<User>(`${AUTH_API}/me/avatar`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return response.data
+}
+
+/**
  * Refresh access token using refresh token
  */
 export async function refreshToken(refreshToken: string): Promise<TokenResponse> {

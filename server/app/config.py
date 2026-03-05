@@ -73,8 +73,20 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"  # Directory for storing uploaded files (relative to server root)
     max_upload_size_mb: int = 16
     allowed_file_extensions: list[str] = [".bin", ".hex", ".ecu", ".dat"]
+
+    # Profile avatars
+    avatar_max_size_mb: int = 2
+    avatar_max_dimension_px: int = 512
+    allowed_avatar_content_types: list[str] = ["image/jpeg", "image/png", "image/webp"]
     
-    @field_validator("cors_origins", "cors_allow_methods", "cors_allow_headers", "allowed_file_extensions", mode="before")
+    @field_validator(
+    "cors_origins",
+    "cors_allow_methods",
+    "cors_allow_headers",
+    "allowed_file_extensions",
+    "allowed_avatar_content_types",
+    mode="before",
+)
     @classmethod
     def parse_json_list(cls, v):
         """Parse JSON string to list if needed."""
@@ -114,6 +126,11 @@ class Settings(BaseSettings):
     def max_upload_size_bytes(self) -> int:
         """Maximum upload size in bytes."""
         return self.max_upload_size_mb * 1024 * 1024
+
+    @property
+    def avatar_max_size_bytes(self) -> int:
+        """Maximum avatar file size in bytes."""
+        return self.avatar_max_size_mb * 1024 * 1024
 
 
 @lru_cache

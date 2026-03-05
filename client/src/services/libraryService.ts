@@ -13,6 +13,8 @@ export interface LibraryProjectSummary {
   project_id: string
   owner_user_id: string
   owner_email: string
+  owner_avatar_url: string | null
+  owner_display_name: string | null
   name: string
   description: string | null
   published_at: string | null
@@ -102,6 +104,8 @@ export interface LibraryScanEntry {
   project_id: string
   project_name: string
   owner_email: string
+  owner_avatar_url: string | null
+  owner_display_name: string | null
   scan_id: string
   scanned_at: string | null
   processing_time_ms: number | null

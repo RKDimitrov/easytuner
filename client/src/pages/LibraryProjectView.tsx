@@ -14,8 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Skeleton } from '../components/ui/skeleton'
 import { getLibraryProject, type LibraryProjectDetail } from '../services/libraryService'
+import { getAvatarUrl } from '../services/authService'
 import { formatBytes } from '../lib/utils'
-import { ArrowLeft, FileCode, FileText, Globe, Calendar, Map } from 'lucide-react'
+import { ArrowLeft, FileCode, FileText, Globe, Calendar, Map, User } from 'lucide-react'
 
 function formatRelativeTime(timestamp: string): string {
   const now = new Date()
@@ -112,6 +113,25 @@ export function LibraryProjectView() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                {project.owner_avatar_url ? (
+                  <img
+                    src={getAvatarUrl(project.owner_avatar_url) ?? ''}
+                    alt=""
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                    width={32}
+                    height={32}
+                  />
+                ) : (
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <User className="h-4 w-4 text-primary" />
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Author</p>
+                  <p className="truncate font-medium">{project.owner_display_name || project.owner_email?.split('@')[0] || 'Unknown'}</p>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <FileCode className="w-4 h-4 text-muted-foreground" />
                 <span>{project.file_count} files</span>

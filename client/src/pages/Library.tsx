@@ -21,6 +21,7 @@ import {
   type LibraryProjectSummary,
   type LibraryScanEntry,
 } from '../services/libraryService'
+import { getAvatarUrl } from '../services/authService'
 import { formatBytes } from '../lib/utils'
 import { BookOpen, Search, FileCode, Calendar, User, Map, Download } from 'lucide-react'
 
@@ -199,9 +200,21 @@ export function Library() {
                         </CardHeader>
                         <CardContent>
                           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <User className="w-3.5 h-3.5" />
-                              {p.owner_email?.split('@')[0] || 'Unknown'}
+                            <span className="flex items-center gap-2">
+                              {p.owner_avatar_url ? (
+                                <img
+                                  src={getAvatarUrl(p.owner_avatar_url) ?? ''}
+                                  alt=""
+                                  className="h-6 w-6 shrink-0 rounded-full object-cover"
+                                  width={24}
+                                  height={24}
+                                />
+                              ) : (
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                                  <User className="h-3.5 w-3.5 text-primary" />
+                                </span>
+                              )}
+                              <span>{p.owner_display_name || p.owner_email?.split('@')[0] || 'Unknown'}</span>
                             </span>
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5" />
@@ -289,7 +302,22 @@ export function Library() {
                               </Link>
                             </TableCell>
                             <TableCell className="text-muted-foreground text-sm">
-                              {s.owner_email.split('@')[0]}
+                              <div className="flex items-center gap-2">
+                                {s.owner_avatar_url ? (
+                                  <img
+                                    src={getAvatarUrl(s.owner_avatar_url) ?? ''}
+                                    alt=""
+                                    className="h-6 w-6 shrink-0 rounded-full object-cover"
+                                    width={24}
+                                    height={24}
+                                  />
+                                ) : (
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                                    <User className="h-3.5 w-3.5 text-primary" />
+                                  </span>
+                                )}
+                                <span>{s.owner_display_name || s.owner_email.split('@')[0]}</span>
+                              </div>
                             </TableCell>
                             <TableCell>
                               <Badge variant="default">

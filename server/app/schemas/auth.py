@@ -135,7 +135,7 @@ class AccessTokenResponse(BaseModel):
 # User Response
 class UserResponse(BaseModel):
     """Schema for user information response."""
-    
+
     user_id: UUID = Field(
         ...,
         description="User's unique identifier"
@@ -172,7 +172,15 @@ class UserResponse(BaseModel):
         ...,
         description="Last update timestamp"
     )
-    
+    display_name: Optional[str] = Field(
+        None,
+        description="User's display name"
+    )
+    avatar_url: Optional[str] = Field(
+        None,
+        description="Profile picture filename (e.g. <user_id>.jpg) for URL /api/v1/avatars/<filename>"
+    )
+
     model_config = {
         "from_attributes": True,  # Enable ORM mode
         "json_schema_extra": {
@@ -185,10 +193,23 @@ class UserResponse(BaseModel):
                 "tos_accepted_at": "2024-01-15T10:25:00Z",
                 "tos_version": 1,
                 "created_at": "2024-01-15T10:25:00Z",
-                "updated_at": "2024-01-15T10:30:00Z"
+                "updated_at": "2024-01-15T10:30:00Z",
+                "display_name": "John",
+                "avatar_url": "123e4567-e89b-12d3-a456-426614174000.jpg"
             }
         }
     }
+
+
+# Profile Update (display name only; avatar is updated via separate upload)
+class ProfileUpdate(BaseModel):
+    """Schema for updating user profile."""
+
+    display_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Display name (null to leave unchanged)"
+    )
 
 
 # Password Change

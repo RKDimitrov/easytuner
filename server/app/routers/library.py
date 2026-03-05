@@ -44,6 +44,8 @@ async def list_library_projects(
         select(
             Project,
             User.email.label("owner_email"),
+            User.avatar_url.label("owner_avatar_url"),
+            User.display_name.label("owner_display_name"),
             func.count(FirmwareFile.file_id).label("file_count"),
         )
         .join(User, User.user_id == Project.owner_user_id)
@@ -56,7 +58,7 @@ async def list_library_projects(
             Project.is_private.is_(False),
             Project.published_at.isnot(None),
         )
-        .group_by(Project.project_id, User.user_id, User.email)
+        .group_by(Project.project_id, User.user_id, User.email, User.avatar_url, User.display_name)
         .order_by(desc(Project.published_at))
         .limit(limit)
         .offset(offset)
@@ -64,11 +66,13 @@ async def list_library_projects(
     result = await db.execute(query)
     rows = result.all()
     projects = []
-    for project, owner_email, file_count in rows:
+    for project, owner_email, owner_avatar_url, owner_display_name, file_count in rows:
         projects.append({
             "project_id": str(project.project_id),
             "owner_user_id": str(project.owner_user_id),
             "owner_email": owner_email,
+            "owner_avatar_url": owner_avatar_url,
+            "owner_display_name": owner_display_name,
             "name": project.name,
             "description": project.description,
             "published_at": project.published_at.isoformat() if project.published_at else None,
@@ -91,7 +95,12 @@ async def get_library_project(
 ):
     """Get published project detail and list of files with scan status."""
     result = await db.execute(
-        select(Project, User.email.label("owner_email"))
+        select(
+            Project,
+            User.email.label("owner_email"),
+            User.avatar_url.label("owner_avatar_url"),
+            User.display_name.label("owner_display_name"),
+        )
         .join(User, User.user_id == Project.owner_user_id)
         .where(
             Project.project_id == project_id,
@@ -106,7 +115,7 @@ async def get_library_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found or not published"
         )
-    project, owner_email = row
+    project, owner_email, owner_avatar_url, owner_display_name = row
 
     files_result = await db.execute(
         select(FirmwareFile)
@@ -150,6 +159,8 @@ async def get_library_project(
         "project_id": str(project.project_id),
         "owner_user_id": str(project.owner_user_id),
         "owner_email": owner_email,
+        "owner_avatar_url": owner_avatar_url,
+        "owner_display_name": owner_display_name,
         "name": project.name,
         "description": project.description,
         "published_at": project.published_at.isoformat() if project.published_at else None,
@@ -247,6 +258,8 @@ async def list_library_scans(
             Project.project_id.label("project_id"),
             Project.name.label("project_name"),
             User.email.label("owner_email"),
+            User.avatar_url.label("owner_avatar_url"),
+            User.display_name.label("owner_display_name"),
             ScanJob.scan_id.label("scan_id"),
             ScanJob.created_at.label("scanned_at"),
             ScanJob.processing_time_ms.label("processing_time_ms"),
@@ -269,6 +282,8 @@ async def list_library_scans(
             Project.name,
             User.user_id,
             User.email,
+            User.avatar_url,
+            User.display_name,
             ScanJob.scan_id,
             ScanJob.created_at,
             ScanJob.processing_time_ms,
@@ -280,7 +295,7 @@ async def list_library_scans(
     result = await db.execute(query)
     rows = result.all()
     scans = []
-    for f, project_id, project_name, owner_email, scan_id, scanned_at, proc_ms, cand_count in rows:
+    for f, project_id, project_name, owner_email, owner_avatar_url, owner_display_name, scan_id, scanned_at, proc_ms, cand_count in rows:
         scans.append({
             "file_id": str(f.file_id),
             "filename": f.filename,
@@ -289,6 +304,8 @@ async def list_library_scans(
             "project_id": str(project_id),
             "project_name": project_name,
             "owner_email": owner_email,
+            "owner_avatar_url": owner_avatar_url,
+            "owner_display_name": owner_display_name,
             "scan_id": str(scan_id),
             "scanned_at": scanned_at.isoformat() if scanned_at else None,
             "processing_time_ms": proc_ms,

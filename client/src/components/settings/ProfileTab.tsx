@@ -1,15 +1,16 @@
 /**
  * Profile Tab Component
- * 
- * Displays and allows editing of user profile information
+ *
+ * Displays and allows editing of user profile information and profile picture.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { User, Mail, Calendar, Save } from 'lucide-react'
+import { User, Mail, Calendar, Save, Upload, Trash2 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
+import * as authService from '../../services/authService'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -17,7 +18,8 @@ import { Label } from '../ui/label'
 import { toast } from 'sonner'
 
 const profileSchema = z.object({
-  displayName: z.string()
+  displayName: z
+    .string()
     .min(1, 'Display name is required')
     .max(50, 'Display name must be 50 characters or less')
     .regex(/^[a-zA-Z0-9\s\-_.]+$/, 'Display name contains invalid characters'),
@@ -25,9 +27,18 @@ const profileSchema = z.object({
 
 type ProfileFormData = z.infer<typeof profileSchema>
 
+/** Max display size for profile picture (CSS) */
+const AVATAR_SIZE_PX = 120
+
 export function ProfileTab() {
-  const { user, fetchCurrentUser } = useAuthStore()
+  const { user, accessToken, fetchCurrentUser } = useAuthStore()
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [isRemovingAvatar, setIsRemovingAvatar] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const displayNameDefault =
+    user?.display_name ?? user?.email?.split('@')[0] ?? ''
 
   const {
     register,
@@ -37,33 +48,20 @@ export function ProfileTab() {
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      displayName: user?.email?.split('@')[0] || '',
+      displayName: displayNameDefault,
     },
+    values: { displayName: displayNameDefault },
   })
 
   const onSubmit = async (data: ProfileFormData) => {
+    if (!accessToken) return
     setIsSaving(true)
     try {
-      // TODO: Replace with actual API call when backend is ready
-      // await userService.updateProfile(data)
-      
-      // For now, simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Update local user data
-      if (user) {
-        // This would be handled by the API response in real implementation
-        console.log('Profile updated:', data)
-      }
-      
+      await authService.updateProfile(accessToken, { displayName: data.displayName })
       toast.success('Profile updated successfully', {
         description: 'Your changes have been saved.',
       })
-      
-      // Reset form dirty state
       reset(data)
-      
-      // Refresh user data
       await fetchCurrentUser()
     } catch (error) {
       toast.error('Failed to update profile', {
@@ -71,6 +69,57 @@ export function ProfileTab() {
       })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const avatarUrl = user ? authService.getAvatarUrl(user.avatar_url) : null
+  const initials = user
+    ? (user.display_name || user.email).slice(0, 2).toUpperCase()
+    : ''
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !accessToken) return
+    if (!authService.AVATAR_ACCEPT.split(',').map((t) => t.trim()).includes(file.type)) {
+      toast.error('Invalid file type', {
+        description: 'Please use JPEG, PNG, or WebP.',
+      })
+      return
+    }
+    if (file.size > authService.AVATAR_MAX_SIZE_BYTES) {
+      toast.error('File too large', {
+        description: 'Maximum size is 2 MB.',
+      })
+      return
+    }
+    setIsUploadingAvatar(true)
+    try {
+      await authService.uploadAvatar(accessToken, file)
+      toast.success('Profile picture updated')
+      await fetchCurrentUser()
+    } catch (error) {
+      toast.error('Failed to upload picture', {
+        description: 'Please try again.',
+      })
+    } finally {
+      setIsUploadingAvatar(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleRemoveAvatar = async () => {
+    if (!accessToken) return
+    setIsRemovingAvatar(true)
+    try {
+      await authService.removeAvatar(accessToken)
+      toast.success('Profile picture removed')
+      await fetchCurrentUser()
+    } catch (error) {
+      toast.error('Failed to remove picture', {
+        description: 'Please try again.',
+      })
+    } finally {
+      setIsRemovingAvatar(false)
     }
   }
 
@@ -178,28 +227,65 @@ export function ProfileTab() {
         </CardContent>
       </Card>
 
-      {/* Profile Picture Placeholder */}
+      {/* Profile Picture */}
       <Card>
         <CardHeader>
           <CardTitle>Profile Picture</CardTitle>
           <CardDescription>
-            Upload a profile picture to personalize your account
+            Upload a profile picture (JPEG, PNG, or WebP, max 2 MB). Displayed at up to {AVATAR_SIZE_PX}×{AVATAR_SIZE_PX} px.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-              <span className="text-xl font-bold">
-                {user.email.split('@')[0].substring(0, 2).toUpperCase()}
-              </span>
+          <div className="flex flex-wrap items-center gap-4">
+            <div
+              className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground"
+              style={{
+                width: AVATAR_SIZE_PX,
+                height: AVATAR_SIZE_PX,
+                minWidth: AVATAR_SIZE_PX,
+                minHeight: AVATAR_SIZE_PX,
+              }}
+            >
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Profile"
+                  className="h-full w-full object-cover"
+                  style={{ maxWidth: AVATAR_SIZE_PX, maxHeight: AVATAR_SIZE_PX }}
+                />
+              ) : (
+                <span className="text-2xl font-bold">{initials}</span>
+              )}
             </div>
-            <div className="flex-1">
-              <p className="text-sm text-muted-foreground mb-2">
-                Profile picture upload will be available in a future update.
-              </p>
-              <Button variant="outline" disabled>
-                Upload Picture
+            <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={authService.AVATAR_ACCEPT}
+                className="hidden"
+                onChange={handleAvatarFileChange}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isUploadingAvatar}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {isUploadingAvatar ? 'Uploading...' : 'Change picture'}
               </Button>
+              {avatarUrl && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isRemovingAvatar}
+                  onClick={handleRemoveAvatar}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {isRemovingAvatar ? 'Removing...' : 'Remove picture'}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

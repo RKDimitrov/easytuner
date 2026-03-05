@@ -1,20 +1,36 @@
 """Authentication API endpoints."""
 
+import re
+from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import MessageResponse, PasswordChange, TokenRefresh, TokenResponse, UserLogin, UserRegistration, UserResponse
+from app.schemas.auth import (
+    PasswordChange,
+    ProfileUpdate,
+    TokenRefresh,
+    TokenResponse,
+    UserLogin,
+    UserRegistration,
+    UserResponse,
+)
 from app.services.auth_service import AuthService
 
 router = APIRouter(
     prefix="/auth",
     tags=["authentication"],
 )
+
+# Safe avatar filename: <uuid>.<ext> only (no path traversal)
+AVATAR_FILENAME_RE = re.compile(r"^[0-9a-fA-F-]{36}\.(jpe?g|png|webp)$")
 
 
 @router.post(
@@ -110,6 +126,116 @@ async def get_current_user_info(
         Current user information
     """
     return UserResponse.model_validate(current_user)
+
+
+@router.patch(
+    "/me",
+    response_model=UserResponse,
+    summary="Update profile",
+    description="Update the current user's profile (e.g. display name)",
+)
+async def update_profile(
+    body: ProfileUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserResponse:
+    """Update current user profile."""
+    if body.display_name is not None:
+        current_user.display_name = body.display_name.strip() or None
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
+def _avatars_dir() -> Path:
+    """Return the absolute path to the avatars directory."""
+    upload_path = Path(settings.upload_dir)
+    if not upload_path.is_absolute():
+        server_root = Path(__file__).parent.parent.parent
+        base = server_root / upload_path
+    else:
+        base = upload_path
+    avatars_dir = base / "avatars"
+    avatars_dir.mkdir(parents=True, exist_ok=True)
+    return avatars_dir
+
+
+@router.post(
+    "/me/avatar",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Upload profile picture",
+    description="Upload or replace the current user's profile picture. Max size and dimensions apply.",
+)
+async def upload_avatar(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(..., description="Image file (JPEG, PNG, WebP)"),
+) -> UserResponse:
+    """Upload or replace the current user's avatar. Validates type and size."""
+    if not file.content_type or file.content_type not in settings.allowed_avatar_content_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed: {settings.allowed_avatar_content_types}",
+        )
+    content = await file.read()
+    if len(content) > settings.avatar_max_size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size is {settings.avatar_max_size_mb} MB.",
+        )
+    ext = "jpg" if file.content_type == "image/jpeg" else "png" if file.content_type == "image/png" else "webp"
+    filename = f"{current_user.user_id}.{ext}"
+    avatars_dir = _avatars_dir()
+    path = avatars_dir / filename
+    path.write_bytes(content)
+    current_user.avatar_url = filename
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
+@router.delete(
+    "/me/avatar",
+    response_model=UserResponse,
+    summary="Remove profile picture",
+    description="Remove the current user's profile picture",
+)
+async def remove_avatar(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserResponse:
+    """Remove current user's avatar."""
+    if current_user.avatar_url:
+        avatars_dir = _avatars_dir()
+        path = avatars_dir / current_user.avatar_url
+        if path.is_file():
+            path.unlink()
+        current_user.avatar_url = None
+        db.add(current_user)
+        await db.commit()
+        await db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
+@router.get(
+    "/avatars/{filename}",
+    response_class=FileResponse,
+    summary="Get avatar image",
+    description="Serve a user's profile picture by filename (public).",
+)
+async def get_avatar(filename: str) -> FileResponse:
+    """Serve avatar image. Filename must be <uuid>.<ext> for security."""
+    if not AVATAR_FILENAME_RE.match(filename):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    avatars_dir = _avatars_dir()
+    path = avatars_dir / filename
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    media_type = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png" if filename.lower().endswith(".png") else "image/webp"
+    return FileResponse(path, media_type=media_type)
 
 
 @router.post(

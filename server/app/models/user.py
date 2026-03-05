@@ -96,6 +96,19 @@ class User(Base, TimestampMixin):
         doc="Version of TOS accepted",
     )
 
+    # Profile
+    display_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        doc="User's display name",
+    )
+
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        doc="Relative path to profile picture (e.g. avatars/<user_id>.jpg)",
+    )
+
     # Relationships
     sessions: Mapped[list["Session"]] = relationship(
         "Session",

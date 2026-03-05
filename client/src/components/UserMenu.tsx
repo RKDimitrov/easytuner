@@ -1,6 +1,6 @@
 /**
  * User Menu Component
- * 
+ *
  * Dropdown menu showing user info and actions (logout, settings, etc.)
  */
 
@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, Settings } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
+import { getAvatarUrl } from '../services/authService'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,22 +45,31 @@ export function UserMenu() {
     return null
   }
 
-  // Get user initials for avatar
-  const initials = user.email
-    .split('@')[0]
-    .substring(0, 2)
+  const avatarUrl = getAvatarUrl(user.avatar_url)
+  const initials = (user.display_name || user.email)
+    .slice(0, 2)
     .toUpperCase()
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="relative h-10 w-10 rounded-full p-0 overflow-hidden border-0 bg-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+          className="relative h-10 w-10 shrink-0 rounded-full p-0 overflow-hidden border-0 bg-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           aria-label="User menu"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-            {initials}
-          </div>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              width={40}
+              height={40}
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
+              {initials}
+            </div>
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>

@@ -13,6 +13,8 @@ export interface User {
   tos_version: number | null
   created_at: string
   updated_at: string
+  display_name: string | null
+  avatar_url: string | null
 }
 
 // Login request
