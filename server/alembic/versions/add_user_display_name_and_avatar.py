@@ -22,8 +22,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("display_name", sa.String(length=100), nullable=True))
-    op.add_column("users", sa.Column("avatar_url", sa.String(length=512), nullable=True))
+    # Idempotent: add columns only if missing (e.g. when init_db created users before this migration ran)
+    op.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)"))
+    op.execute(sa.text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(512)"))
 
 
 def downgrade() -> None:
