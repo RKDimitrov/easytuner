@@ -1,0 +1,5 @@
+# https://easytuner.me/robots.txt
+User-agent: *
+Allow: /
+
+Sitemap: https://easytuner.me/sitemap.xml
