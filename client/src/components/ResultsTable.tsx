@@ -204,9 +204,11 @@ export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
                         </span>
                       </div>
 
-                      {/* Offset */}
+                      {/* Offset (with optional name prefix) */}
                       <div className="font-mono text-sm text-data">
-                        {formatHexOffset(candidate.offset)}
+                        {candidate.name
+                          ? `${candidate.name} – ${formatHexOffset(candidate.offset)}`
+                          : formatHexOffset(candidate.offset)}
                       </div>
 
                       {/* Size */}

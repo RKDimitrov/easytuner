@@ -32,11 +32,11 @@ import { validateChecksum, type ChecksumValidationResponse } from '../services/c
 import { useIsMobile } from '../hooks/use-mobile'
 import { fetchUserMapsForFile, saveUserMapForFile } from '../services/userMapService'
 import { cn } from '../lib/utils'
-import { 
-  FileCode, 
-  Play, 
-  Download, 
-  ArrowLeft, 
+import {
+  FileCode,
+  Play,
+  Download,
+  ArrowLeft,
   Loader2,
   CheckCircle2,
   Box,
@@ -45,7 +45,8 @@ import {
   Shield,
   Map,
   List,
-  MessageCircle
+  MessageCircle,
+  Sparkles,
 } from 'lucide-react'
 
 export function Analysis() {
@@ -93,7 +94,9 @@ export function Analysis() {
     }
   }, [fileData, fileId, setEditFile])
 
-  // Load user-created maps (My Maps) from the server when a file is selected
+  // Load user-created maps (My Maps) from the server when a file is selected.
+  // Map names (including AI-identified names) are persisted in the backend `user_maps` table
+  // and loaded here so they survive refresh and logout.
   useEffect(() => {
     if (!fileId) return
     ;(async () => {
@@ -105,6 +108,18 @@ export function Analysis() {
       }
     })()
   }, [fileId, setUserMaps])
+
+  // Apply persisted user-map names onto scan candidates (by offset) so the Analysis Results
+  // list shows saved names after refresh, without re-identifying.
+  useEffect(() => {
+    if (!fileId || candidates.length === 0 || userMaps.length === 0) return
+    for (const c of candidates) {
+      const um = userMaps.find((m) => m.offset === c.offset)
+      if (um?.name != null && c.name !== um.name) {
+        updateCandidate(c.id, { name: um.name })
+      }
+    }
+  }, [fileId, candidates, userMaps, updateCandidate])
 
   const [scanComplete, setScanComplete] = useState(false)
   const [viewMode, setViewMode] = useState<'hex' | 'text' | '3d'>('hex')
@@ -122,6 +137,7 @@ export function Analysis() {
   const [showMapPropsDialog, setShowMapPropsDialog] = useState(false)
   /** null = create new; otherwise edit this map (user or analysis) */
   const [mapPropsTarget, setMapPropsTarget] = useState<MapCandidate | null | 'new'>(null)
+  const [isIdentifyingMaps, setIsIdentifyingMaps] = useState(false)
 
   // Block navigation during scan using beforeunload and history blocking
   useEffect(() => {
@@ -693,7 +709,7 @@ export function Analysis() {
     }
   }
 
-  const handleAssistantSend = async (userMessage: string) => {
+  const sendAssistantMessageCore = async (userMessage: string) => {
     // Prefer user-created maps first, then backend candidates (no duplicates)
     const combinedMaps: MapCandidate[] = [
       ...userMaps,
@@ -735,6 +751,11 @@ export function Analysis() {
       allMapsTextViews: allMapsTextViews ?? undefined,
     })
     const res = await assistantChat(payload)
+    return res
+  }
+
+  const handleAssistantSend = async (userMessage: string) => {
+    const res = await sendAssistantMessageCore(userMessage)
     // Optimistically append new messages to local state so history reflects them immediately
     setAssistantMessages((prev) => [
       ...prev,
@@ -768,6 +789,85 @@ export function Analysis() {
     setAssistantOpen(false)
     if (currentProject?.project_id) {
       navigate(`/projects/${currentProject.project_id}`)
+    }
+  }
+
+  const handleIdentifyMaps = async () => {
+    if (!scanComplete || !fileId || isIdentifyingMaps) return
+    setAssistantOpen(true)
+    setIsIdentifyingMaps(true)
+    try {
+      const prompt =
+        'IDENTIFY_MAPS: Look at all scanned maps and the all_maps_text_views context and tell me, for each map, what it most likely represents in the ECU (for example: torque limiter, driver wish, boost target, smoke limiter, lambda target, EGR map, limit/threshold, etc.). In your summary, give a short overview. In suggestions, add ONE item per map in this exact format: "0xOFFSET | Short clean map name". Use the exact hex offsets from the map headers (e.g. 0x683CC). Keep the names concise, like "Torque limiter", "Driver wish", "Boost target", "Fuel quantity", "Boost control", "Limit/threshold (uncertain)". Do not include any other text in the suggestions items.'
+      const res = await sendAssistantMessageCore(prompt)
+
+      // Append to chat history so the user sees the conversation
+      setAssistantMessages((prev) => [
+        ...prev,
+        { role: 'user', userText: prompt },
+        {
+          role: 'assistant',
+          summary: res.summary,
+          issues: res.issues,
+          suggestions: res.suggestions,
+          ask_vehicle: res.ask_vehicle ?? null,
+        },
+      ])
+
+      // Parse suggestions of form "0xOFFSET | Name"
+      const suggestions = res.suggestions ?? []
+      if (suggestions.length > 0) {
+        const labelItems = suggestions
+          .map((s) => s.trim())
+          .filter((s) => s.includes('|'))
+          .map((s) => {
+            const [offsetPart, namePart] = s.split('|')
+            const offsetHex = offsetPart.trim().toLowerCase()
+            const name = namePart.trim()
+            return { offsetHex, name }
+          })
+          .filter((item) => item.offsetHex.startsWith('0x') && item.name.length > 0)
+
+        if (labelItems.length > 0) {
+          const byOffsetHex = (offset: number) => formatHexOffset(offset).toLowerCase()
+
+          for (const item of labelItems) {
+            const cand = candidates.find(
+              (c) => byOffsetHex(c.offset) === item.offsetHex
+            )
+            if (!cand) continue
+
+            // Update in-memory candidate name (used by ResultsTable and Map Assistant)
+            updateCandidate(cand.id, { name: item.name })
+
+            // Try to persist via user maps so names survive refresh
+            const existingUserMap =
+              userMaps.find((m) => byOffsetHex(m.offset) === item.offsetHex) ?? null
+
+            const baseMap: MapCandidate = existingUserMap
+              ? { ...existingUserMap, name: item.name }
+              : {
+                  ...cand,
+                  id: existingUserMap?.id ?? '',
+                  name: item.name,
+                  confidence: cand.confidence,
+                }
+
+            try {
+              const saved = await saveUserMapForFile(fileId, baseMap)
+              if (existingUserMap) {
+                updateUserMap(saved.id, saved)
+              } else {
+                addUserMap(saved)
+              }
+            } catch (e) {
+              console.error('Failed to persist AI-identified map name', e)
+            }
+          }
+        }
+      }
+    } finally {
+      setIsIdentifyingMaps(false)
     }
   }
 
@@ -912,6 +1012,28 @@ export function Analysis() {
                     <Play className="w-4 h-4 md:mr-2" />
                     <span className="hidden md:inline">Start Scan</span>
                     <span className="md:hidden">Scan</span>
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                size={isMobile ? 'sm' : 'default'}
+                onClick={handleIdentifyMaps}
+                disabled={!scanComplete || isScanning || !fileId || candidates.length === 0 || isIdentifyingMaps}
+                className="flex-1 md:flex-initial"
+              >
+                {isIdentifyingMaps ? (
+                  <>
+                    <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
+                    <span className="hidden md:inline">Identifying maps…</span>
+                    <span className="md:hidden">Identifying</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 md:mr-2" />
+                    <span className="hidden md:inline">Identify Maps with AI</span>
+                    <span className="md:hidden">ID Maps</span>
                   </>
                 )}
               </Button>
