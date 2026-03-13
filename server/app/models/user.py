@@ -13,6 +13,7 @@ from app.models.base import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.annotation import Annotation
+    from app.models.assistant_chat import AssistantChatMessage
     from app.models.audit_log import AuditLog
     from app.models.export import Export
     from app.models.project import Project
@@ -149,6 +150,13 @@ class User(Base, TimestampMixin):
         back_populates="user",
         cascade="all, delete-orphan",
         doc="User-defined maps created by the user",
+    )
+
+    assistant_messages: Mapped[list["AssistantChatMessage"]] = relationship(
+        "AssistantChatMessage",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        doc="Map Assistant chat messages for this user",
     )
 
     # Indexes

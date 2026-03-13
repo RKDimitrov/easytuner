@@ -11,6 +11,7 @@ from app.models.scan_job import ScanJob
 from app.models.session import Session
 from app.models.user import User
 from app.models.user_map import UserMap
+from app.models.assistant_chat import AssistantChatMessage
 
 __all__ = [
     "TimestampMixin",
@@ -24,4 +25,5 @@ __all__ = [
     "AuditLog",
     "Export",
     "UserMap",
+    "AssistantChatMessage",
 ]

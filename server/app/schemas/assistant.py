@@ -3,8 +3,11 @@ Schemas for the Map Assistant chat API.
 
 Request payload: project_context, scanned_files, maps, user_message.
 Response: summary, issues, suggestions, ask_vehicle (optional).
+Includes additional models for persisted chat history.
 """
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -108,4 +111,44 @@ class AssistantChatResponse(BaseModel):
     ask_vehicle: Optional[str] = Field(
         default=None,
         description="If tune was requested and vehicle_model is missing, one sentence asking for vehicle/ECU model",
+    )
+
+
+class AssistantChatHistoryItem(BaseModel):
+    """One persisted chat message for a file conversation."""
+
+    message_id: UUID = Field(..., description="Unique chat message identifier")
+    role: Literal["user", "assistant"] = Field(..., description="Message role")
+    user_text: Optional[str] = Field(
+        default=None,
+        description="User message text when role='user'",
+    )
+    summary: Optional[str] = Field(
+        default=None,
+        description="Assistant summary when role='assistant'",
+    )
+    issues: List[str] = Field(
+        default_factory=list,
+        description="Issues list when role='assistant'",
+    )
+    suggestions: List[str] = Field(
+        default_factory=list,
+        description="Suggestions list when role='assistant'",
+    )
+    ask_vehicle: Optional[str] = Field(
+        default=None,
+        description="ask_vehicle prompt when role='assistant'",
+    )
+    created_at: datetime = Field(
+        ...,
+        description="When this message was created",
+    )
+
+
+class AssistantChatHistoryResponse(BaseModel):
+    """Response for GET /api/v1/assistant/history."""
+
+    messages: List[AssistantChatHistoryItem] = Field(
+        default_factory=list,
+        description="Chronological list of chat messages for this file",
     )

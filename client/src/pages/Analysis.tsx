@@ -20,9 +20,9 @@ import { ChecksumStatus } from '../components/ChecksumStatus'
 import { ChecksumTester } from '../components/ChecksumTester'
 import { ExportDialog } from '../components/ExportDialog'
 import { MapPropertiesDialog } from '../components/MapPropertiesDialog'
-import { MapAssistantPanel, type MapCardItem } from '../components/MapAssistantPanel'
+import { MapAssistantPanel, type MapCardItem, type AssistantMessage } from '../components/MapAssistantPanel'
 import { createScan, getScan, getScanResults, type CandidateResponse } from '../services/scanService'
-import { assistantChat } from '../services/assistantService'
+import { assistantChat, getAssistantHistory, clearAssistantHistory } from '../services/assistantService'
 import { buildAssistantPayload } from '../lib/assistantPayload'
 import { getMapTableAsText } from '../lib/mapTableView'
 import { useProjectStore } from '../store/projectStore'
@@ -116,6 +116,7 @@ export function Analysis() {
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [checksumValidation, setChecksumValidation] = useState<ChecksumValidationResponse | null>(null)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([])
   const currentProject = useProjectStore((s) => s.currentProject)
   const [isValidatingChecksum, setIsValidatingChecksum] = useState(false)
   const [showMapPropsDialog, setShowMapPropsDialog] = useState(false)
@@ -185,6 +186,33 @@ export function Analysis() {
       navigate('/projects')
     }
   }, [fileData, fileId, navigate])
+
+  // Load Map Assistant chat history when a file is selected
+  useEffect(() => {
+    if (!fileId) {
+      setAssistantMessages([])
+      return
+    }
+    ;(async () => {
+      try {
+        const history = await getAssistantHistory(fileId)
+        const mapped: AssistantMessage[] = history.map((m) =>
+          m.role === 'user'
+            ? { role: 'user', userText: m.user_text ?? '' }
+            : {
+                role: 'assistant',
+                summary: m.summary ?? '',
+                issues: m.issues ?? [],
+                suggestions: m.suggestions ?? [],
+                ask_vehicle: m.ask_vehicle ?? null,
+              }
+        )
+        setAssistantMessages(mapped)
+      } catch (error) {
+        console.error('Failed to load assistant history for file', fileId, error)
+      }
+    })()
+  }, [fileId])
 
   // Convert backend candidate to frontend format
   const convertCandidate = (candidate: CandidateResponse): MapCandidate => {
@@ -707,7 +735,33 @@ export function Analysis() {
       allMapsTextViews: allMapsTextViews ?? undefined,
     })
     const res = await assistantChat(payload)
+    // Optimistically append new messages to local state so history reflects them immediately
+    setAssistantMessages((prev) => [
+      ...prev,
+      { role: 'user', userText: userMessage },
+      {
+        role: 'assistant',
+        summary: res.summary,
+        issues: res.issues,
+        suggestions: res.suggestions,
+        ask_vehicle: res.ask_vehicle ?? null,
+      },
+    ])
     return res
+  }
+
+  const handleClearAssistantChat = async () => {
+    if (!fileId) return
+    try {
+      await clearAssistantHistory(fileId)
+      setAssistantMessages([])
+      toast.success('Chat cleared', { description: 'Map Assistant history for this file has been deleted.' })
+    } catch (error) {
+      console.error('Failed to clear assistant history', error)
+      toast.error('Failed to clear chat', {
+        description: error instanceof Error ? error.message : 'Unknown error while clearing chat history',
+      })
+    }
   }
 
   const handleAskVehicle = () => {
@@ -1200,6 +1254,8 @@ export function Analysis() {
                 onAskVehicle={currentProject?.project_id ? handleAskVehicle : undefined}
                 mapsInContext={mapsInContext}
                 onOpenMap={handleOpenMapFromAssistant}
+                initialMessages={assistantMessages}
+                onClearChat={fileId ? handleClearAssistantChat : undefined}
               />
             </div>
           </div>

@@ -78,10 +78,39 @@ export interface AssistantChatResponsePayload {
   ask_vehicle?: string | null
 }
 
+export interface AssistantHistoryMessageDTO {
+  message_id: string
+  role: 'user' | 'assistant'
+  user_text?: string | null
+  summary?: string | null
+  issues: string[]
+  suggestions: string[]
+  ask_vehicle?: string | null
+  created_at: string
+}
+
 export async function assistantChat(
   body: AssistantChatRequestPayload
 ): Promise<AssistantChatResponsePayload> {
   const api = createAuthAxios()
   const { data } = await api.post<AssistantChatResponsePayload>('/assistant/chat', body)
   return data
+}
+
+export async function getAssistantHistory(fileId: string): Promise<AssistantHistoryMessageDTO[]> {
+  const api = createAuthAxios()
+  const { data } = await api.get<{ messages: AssistantHistoryMessageDTO[] }>(
+    '/assistant/history',
+    {
+      params: { file_id: fileId },
+    }
+  )
+  return data.messages
+}
+
+export async function clearAssistantHistory(fileId: string): Promise<void> {
+  const api = createAuthAxios()
+  await api.delete('/assistant/history', {
+    params: { file_id: fileId },
+  })
 }

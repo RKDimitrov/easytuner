@@ -6,8 +6,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
-import { X, Send, Loader2 } from 'lucide-react'
+import { X, Send, Loader2, AlertCircle } from 'lucide-react'
 import { cn } from '../lib/utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog'
 
 export interface AssistantMessage {
   role: 'user' | 'assistant'
@@ -47,6 +55,10 @@ export interface MapAssistantPanelProps {
   mapsInContext?: MapCardItem[]
   /** When user clicks "Open in viewer" on a map card */
   onOpenMap?: (mapId: string) => void
+  /** Optional initial messages loaded from the server (history) */
+  initialMessages?: AssistantMessage[]
+  /** Optional: clear persisted chat on the server */
+  onClearChat?: () => Promise<void>
 }
 
 export function MapAssistantPanel({
@@ -57,10 +69,14 @@ export function MapAssistantPanel({
   onAskVehicle,
   mapsInContext = [],
   onOpenMap,
+  initialMessages,
+  onClearChat,
 }: MapAssistantPanelProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [messages, setMessages] = useState<AssistantMessage[]>([])
+  const [messages, setMessages] = useState<AssistantMessage[]>(initialMessages ?? [])
+  const [clearing, setClearing] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -68,6 +84,22 @@ export function MapAssistantPanel({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [open, messages])
+
+  useEffect(() => {
+    setMessages(initialMessages ?? [])
+  }, [initialMessages])
+
+  const handleClearChat = async () => {
+    if (!onClearChat || clearing) return
+    setClearing(true)
+    try {
+      await onClearChat()
+      setMessages([])
+    } finally {
+      setClearing(false)
+      setShowDeleteDialog(false)
+    }
+  }
 
   const handleSend = async () => {
     const text = input.trim()
@@ -109,9 +141,21 @@ export function MapAssistantPanel({
       <div className="flex h-full min-h-[400px] lg:min-h-[calc(100vh-200px)] flex-col rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-lg font-semibold">Map Assistant</h2>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {onClearChat && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={clearing}
+              >
+                Delete chat
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <div className="flex-1 min-h-0 flex flex-col animate-in fade-in-0 duration-300 delay-150 [animation-fill-mode:backwards]">
         {mapsInContext.length > 0 && (
@@ -229,6 +273,42 @@ export function MapAssistantPanel({
           </div>
         </div>
         </div>
+        {/* Delete chat confirmation dialog (inline layout) */}
+        {onClearChat && (
+          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Delete chat history?</DialogTitle>
+                <DialogDescription>
+                  This will delete the Map Assistant conversation for this file. This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-start gap-3 py-2">
+                <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                <p className="text-sm text-muted-foreground">
+                  Are you sure you want to permanently delete this chat history? You&apos;ll start with an empty
+                  conversation next time.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteDialog(false)}
+                  disabled={clearing}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleClearChat}
+                  disabled={clearing}
+                >
+                  {clearing ? 'Deleting…' : 'Delete chat'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     )
   }
@@ -252,9 +332,21 @@ export function MapAssistantPanel({
           {/* Header */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-lg font-semibold">Map Assistant</h2>
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {onClearChat && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={clearing}
+                >
+                  Delete chat
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Maps in context (so user sees maps correctly) */}
@@ -389,6 +481,42 @@ export function MapAssistantPanel({
           </div>
         </div>
       </aside>
+      {/* Delete chat confirmation dialog */}
+      {onClearChat && (
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete chat history?</DialogTitle>
+              <DialogDescription>
+                This will delete the Map Assistant conversation for this file. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-start gap-3 py-2">
+              <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to permanently delete this chat history? You&apos;ll start with an empty
+                conversation next time.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={clearing}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleClearChat}
+                disabled={clearing}
+              >
+                {clearing ? 'Deleting…' : 'Delete chat'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   )
 }
