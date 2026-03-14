@@ -77,8 +77,10 @@ export function MapTextViewer({ candidate, fileData, noCard = false, onUpdateAxi
       return { values: [] as number[][], xSize: 0, ySize: 0 }
     }
     const { x: xSize, y: ySize } = candidate.dimensions
-    const dataStart = candidate.offset
-    const dataEnd = Math.min(dataStart + candidate.size, displayData.length)
+    const skipBytes = candidate.skipBytes ?? 0
+    const dataStart = candidate.offset + skipBytes
+    const dataLength = xSize * ySize * elementSize
+    const dataEnd = Math.min(dataStart + dataLength, displayData.length)
     const values: number[][] = []
     for (let y = 0; y < ySize; y++) {
       const row: number[] = []
@@ -174,14 +176,18 @@ export function MapTextViewer({ candidate, fileData, noCard = false, onUpdateAxi
     )
   }
 
+  const firstRowIsXAxis = candidate.firstRowIsXAxis === true
+  const dataRows = firstRowIsXAxis ? values.slice(1) : values
+  const dataRowOffset = firstRowIsXAxis ? 1 : 0
+
   const tableContent = (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full w-full min-w-0 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-auto p-4">
         <table className="border-collapse font-mono text-sm w-max">
           <thead>
             <tr>
               <th className="border border-border bg-muted/50 px-2 py-1 text-left text-muted-foreground min-w-[3rem]">
-                {candidate.yAxis?.description || candidate.yAxis?.unit || '–'}
+                {firstRowIsXAxis ? 'Row' : (candidate.yAxis?.description || candidate.yAxis?.unit || '–')}
               </th>
               {Array.from({ length: xSize }, (_, i) => {
                 const isEditing = editingCell?.type === 'x' && editingCell.i === i
@@ -196,6 +202,7 @@ export function MapTextViewer({ candidate, fileData, noCard = false, onUpdateAxi
                       onUpdateAxis && 'cursor-pointer'
                     )}
                     onDoubleClick={() => onUpdateAxis && setEditingCell({ type: 'x', i })}
+                    title={onUpdateAxis ? 'Double-click to edit X-axis (e.g. RPM)' : undefined}
                   >
                     {isEditing ? (
                       <input
@@ -219,40 +226,43 @@ export function MapTextViewer({ candidate, fileData, noCard = false, onUpdateAxi
             </tr>
           </thead>
           <tbody>
-            {values.map((row, y) => (
-              <tr key={y}>
+            {dataRows.map((row, d) => {
+              const valuesRowIndex = d + dataRowOffset
+              return (
+                <tr key={d}>
                 <td
                   className={cn(
                     'border border-border px-2 py-1 text-right bg-muted/30 text-muted-foreground sticky left-0 z-10',
-                    selectedCell?.y === y ? 'bg-primary/20' : '',
+                    selectedCell?.y === d ? 'bg-primary/20' : '',
                     onUpdateAxis && 'cursor-pointer'
                   )}
-                  onDoubleClick={() => onUpdateAxis && setEditingCell({ type: 'y', i: y })}
+                  onDoubleClick={() => onUpdateAxis && setEditingCell({ type: 'y', i: valuesRowIndex })}
+                  title={onUpdateAxis ? 'Double-click to edit Y-axis' : undefined}
                 >
-                  {editingCell?.type === 'y' && editingCell.i === y ? (
+                  {editingCell?.type === 'y' && editingCell.i === valuesRowIndex ? (
                     <input
-                      ref={editingCell?.type === 'y' && editingCell.i === y ? inputRef : undefined}
+                      ref={editingCell?.type === 'y' && editingCell.i === valuesRowIndex ? inputRef : undefined}
                       type="text"
                       className="w-full min-w-[2.5rem] bg-background text-right border rounded px-1 focus:ring-1 focus:ring-ring outline-none"
-                      defaultValue={typeof yLabels[y] === 'number' && !Number.isInteger(yLabels[y]) ? (yLabels[y] as number).toFixed(2) : String(yLabels[y] ?? y)}
-                      onBlur={(e) => commitAxisEdit('y', y, e.target.value)}
+                      defaultValue={typeof yLabels[valuesRowIndex] === 'number' && !Number.isInteger(yLabels[valuesRowIndex]) ? (yLabels[valuesRowIndex] as number).toFixed(2) : String(yLabels[valuesRowIndex] ?? d)}
+                      onBlur={(e) => commitAxisEdit('y', valuesRowIndex, e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') { e.currentTarget.blur(); commitAxisEdit('y', y, e.currentTarget.value) }
+                        if (e.key === 'Enter') { e.currentTarget.blur(); commitAxisEdit('y', valuesRowIndex, e.currentTarget.value) }
                         if (e.key === 'Escape') setEditingCell(null)
                       }}
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    typeof yLabels[y] === 'number' && !Number.isInteger(yLabels[y])
-                      ? (yLabels[y] as number).toFixed(2)
-                      : (yLabels[y] ?? y)
+                    typeof yLabels[valuesRowIndex] === 'number' && !Number.isInteger(yLabels[valuesRowIndex])
+                      ? (yLabels[valuesRowIndex] as number).toFixed(2)
+                      : (yLabels[valuesRowIndex] ?? d)
                   )}
                 </td>
                 {row.map((_, x) => {
-                  const val = getDataDisplayValue(y, x)
-                  const isHovered = hoveredCell?.x === x && hoveredCell?.y === y
-                  const isSelected = selectedCell?.x === x && selectedCell?.y === y
-                  const isEditing = editingCell?.type === 'data' && editingCell.row === y && editingCell.col === x
+                  const val = getDataDisplayValue(valuesRowIndex, x)
+                  const isHovered = hoveredCell?.x === x && hoveredCell?.y === d
+                  const isSelected = selectedCell?.x === x && selectedCell?.y === d
+                  const isEditing = editingCell?.type === 'data' && editingCell.row === valuesRowIndex && editingCell.col === x
                   const displayStr = Number.isInteger(val) ? String(val) : val.toFixed(2)
                   return (
                     <td
@@ -263,20 +273,20 @@ export function MapTextViewer({ candidate, fileData, noCard = false, onUpdateAxi
                         isSelected && 'bg-primary/30 text-primary ring-1 ring-primary',
                         isHovered && !isSelected && 'bg-accent/50'
                       )}
-                      onMouseEnter={() => setHoveredCell({ x, y })}
+                      onMouseEnter={() => setHoveredCell({ x, y: d })}
                       onMouseLeave={() => setHoveredCell(null)}
-                      onClick={() => setSelectedCell({ x, y })}
-                      onDoubleClick={() => onUpdateCell && setEditingCell({ type: 'data', row: y, col: x })}
+                      onClick={() => setSelectedCell({ x, y: d })}
+                      onDoubleClick={() => onUpdateCell && setEditingCell({ type: 'data', row: valuesRowIndex, col: x })}
                     >
                       {isEditing ? (
                         <input
-                          ref={editingCell?.type === 'data' && editingCell.row === y && editingCell.col === x ? inputRef : undefined}
+                          ref={editingCell?.type === 'data' && editingCell.row === valuesRowIndex && editingCell.col === x ? inputRef : undefined}
                           type="text"
                           className="w-full min-w-[2.5rem] bg-background text-right border rounded px-1 focus:ring-1 focus:ring-ring outline-none"
                           defaultValue={displayStr}
-                          onBlur={(e) => commitDataEdit(y, x, e.target.value)}
+                          onBlur={(e) => commitDataEdit(valuesRowIndex, x, e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') { e.currentTarget.blur(); commitDataEdit(y, x, e.currentTarget.value) }
+                            if (e.key === 'Enter') { e.currentTarget.blur(); commitDataEdit(valuesRowIndex, x, e.currentTarget.value) }
                             if (e.key === 'Escape') setEditingCell(null)
                           }}
                           onClick={(e) => e.stopPropagation()}
@@ -288,13 +298,14 @@ export function MapTextViewer({ candidate, fileData, noCard = false, onUpdateAxi
                   )
                 })}
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>
       {hoveredCell != null && (
         <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground bg-muted/30">
-          Cell [{hoveredCell.x}, {hoveredCell.y}] = {getDataDisplayValue(hoveredCell.y, hoveredCell.x)}
+          Cell [{hoveredCell.x}, {hoveredCell.y}] = {getDataDisplayValue(hoveredCell.y + dataRowOffset, hoveredCell.x)}
         </div>
       )}
     </div>

@@ -134,7 +134,7 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
   }, [selectedCandidate, rowVirtualizer, displayData])
   
   const content = (
-        <div className="h-full flex flex-col min-h-0">
+        <div className="h-full w-full min-w-0 flex flex-col min-h-0">
           {/* Go to address bar */}
           <form
             onSubmit={handleGoToAddress}
@@ -157,7 +157,7 @@ export function HexViewer({ noCard = false }: HexViewerProps = {}) {
           </form>
           <div
             ref={parentRef}
-            className="flex-1 overflow-auto bg-card min-h-0"
+            className="flex-1 overflow-auto bg-card min-h-0 w-full min-w-0"
             style={{
               contain: 'strict',
               ...(displayData?.length ? { minHeight: '60vh' } : {}),

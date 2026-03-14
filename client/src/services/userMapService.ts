@@ -71,6 +71,7 @@ function responseToCandidate(res: UserMapResponse): MapCandidate {
     mirrorMap: config.mirrorMap as boolean | undefined,
     xAxis: (config.xAxis as any) ?? undefined,
     yAxis: (config.yAxis as any) ?? undefined,
+    firstRowIsXAxis: config.firstRowIsXAxis as boolean | undefined,
     comment: config.comment as string | undefined,
     dataOverrides: (config.dataOverrides as Record<string, number> | undefined) ?? undefined,
   }

@@ -26,8 +26,26 @@ Rules:
 - When all_maps_text_views is present, it contains the Text Viewer table (axis labels + data grid) for multiple scanned maps, each under a "--- Map: name (type, offset, dimensions) ---" header. If the user asks what the other scan results are, what each map is, or what they relate to, you MUST use all_maps_text_views: look at each map's axes (e.g. RPM, load), dimensions, value ranges and patterns, and say what each likely is (e.g. "0x683CC: 2D 6×7, RPM vs load—likely fuel or torque map"; "0x64020: 2D 17×1—likely RPM-based limit or limiter"). List or describe each scanned map the user cares about. Do not say you don't have that information when all_maps_text_views is provided.
 - For tuning or edit suggestions, only answer with concrete steps if project_context.vehicle_model is set. If the user asks to tune but vehicle_model is null or empty, set ask_vehicle to the one-sentence question above and leave suggestions minimal or empty.
 - When the user asks broader questions about whether their engine can safely handle a certain change (e.g. "Can my car handle a rev limiter at higher RPM?"), give a clear opinionated answer using the known vehicle_model and general tuner knowledge. Pick a side and justify it: say explicitly if most tuners consider it safe at that RPM on that platform, safe only with supporting mods, or generally not recommended, and explain why (rod strength, turbo size, valve train, clutch, etc.). Do NOT answer only "it depends" or stay neutral.
+
+Correcting wrong map analysis (selected_map_for_correction):
+- When selected_map_for_correction is present, the user has a map selected. You MUST look at the selected_map_text_view (the exact table and numbers from the analysis map) and infer the correct structure yourself. The user does not know what is wrong—you must figure it out from the numbers. Not every map is the same; analyze each map's values to decide what is axis and what is data.
+
+CRITICAL – Infer axis vs data from the numbers (do not assume every map is the same):
+- Look at the actual values in the table. Axis breakpoints (e.g. RPM, load) usually form a monotonic or regular sequence: 1000, 1250, 1500, 1750, 1900, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 3750, 4000, 4530, 5200, 5300, 6000, etc. Map data (e.g. torque limits) often has a different range or pattern (e.g. 3600, 4000, 4600, 5030, 5000, 4510… or lower values, or less regular).
+- If the current "data" row(s) still look like breakpoints (e.g. 2250, 2500, 2750, 3000, 3250, 3500), they are NOT the real map values—they are the continuation of the x-axis. In that case the dimensions are too small: you must increase the number of columns so that the full axis is in row 0 and only the true map values appear in row 1 (and later). Example: if row 0 has 6 RPMs and row 1 has 6 more RPM-like values, the axis is 12+ values; suggest dimensions so that the first row holds all axis values (e.g. 19,2 for 19 RPMs + 19 torque values).
+- Count from the numbers: how many values in a row look like axis (RPM/breakpoints)? How many rows look like axis vs like data? Set dimensions (num_columns, num_rows) so that row 0 = full axis and rows 1+ = only real map values. It does not have to be perfect (some room is acceptable), but the values shown in the table body must be the actual map data, not more axis values.
+- Use skip_bytes when there is leading header/garbage. Trim trailing garbage by choosing num_rows (and num_columns) so you do not read junk at the end. Prefer 2D when there is a clear axis row and data row(s); use 1D only when there is no separate axis.
+
+- You have full control to suggest a correction: type (1D, 2D, or 3D), dimensions, and where the map data starts (offset_hex or skip_bytes). If the analysis already looks correct (axis in row 0, real values in data rows), do NOT add a MAP_FIX; say so in the summary. If it looks wrong, add exactly one MAP_FIX line.
+- To suggest a correction, add exactly one line in suggestions: MAP_FIX: type=<1D|2D|3D> dimensions=<x,y> [offset_hex=0xXXXXX | skip_bytes=N]
+  - type: 2D when the numbers show a clear axis row and data row(s); 1D only when there is no separate axis.
+  - dimensions: (num_columns, num_rows) so that the first row contains the full axis (all breakpoints) and the following rows contain only map values. If the current table shows axis-like values in the "data" row, increase num_columns (e.g. 19,2 for 19 breakpoints and 1 data row). Not every map is the same—derive from the value pattern.
+  - Use skip_bytes for leading header; reduce num_rows to avoid trailing garbage.
+- Examples: (a) Table has row 0 = 1000,1250,1500,1750,1900,2000 and row 1 = 2250,2500,2750,3000,3250,3500 (still RPM-like) → axis is longer than 6; real data starts after 19 breakpoints → MAP_FIX: type=2D dimensions=19,2 skip_bytes=12. (b) Row 0 = RPMs, rows 1–5 = different value range (torque-like), row 6 = garbage → MAP_FIX: type=2D dimensions=6,6 skip_bytes=12. (c) Analysis correct → no MAP_FIX.
+- Put only one MAP_FIX line in suggestions. In the summary, briefly explain what you inferred (which values are axis, which are data) and why you chose those dimensions.
+
 - Respond with a JSON object only, no markdown or extra text. Use this exact shape:
-{"summary": "Short explanation focused on this question (see rules above).", "issues": ["issue or empty list"], "suggestions": ["Step 1: exact action and value", "Step 2: ..."], "ask_vehicle": null or "one sentence"}
+{"summary": "Short explanation focused on this question (see rules above).", "issues": ["issue or empty list"], "suggestions": ["Step 1: exact action and value", "Step 2: ...", "MAP_FIX: ... if correcting map"], "ask_vehicle": null or "one sentence"}
 """
 
 
@@ -43,6 +61,8 @@ def _build_user_message(req: AssistantChatRequest) -> str:
         payload["selected_map_text_view"] = req.selected_map_text_view.strip()
     if req.all_maps_text_views and req.all_maps_text_views.strip():
         payload["all_maps_text_views"] = req.all_maps_text_views.strip()
+    if req.selected_map_for_correction:
+        payload["selected_map_for_correction"] = req.selected_map_for_correction
     return json.dumps(payload, indent=2)
 
 

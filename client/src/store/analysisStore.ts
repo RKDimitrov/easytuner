@@ -46,6 +46,8 @@ export interface MapCandidate {
   mirrorMap?: boolean
   xAxis?: AxisConfig
   yAxis?: AxisConfig
+  /** When true, the first row of the grid is used as x-axis labels (RPM/breakpoints); data grid shows only rows 1..y-1. Axes remain editable. */
+  firstRowIsXAxis?: boolean
   comment?: string
   /** Cell overrides: key "row,col" => value (for display/edit without writing binary yet) */
   dataOverrides?: Record<string, number>

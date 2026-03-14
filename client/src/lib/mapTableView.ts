@@ -70,8 +70,10 @@ export function getMapTableAsText(
   const xAxisElementSize = DATA_ORGANIZATION_OPTIONS.find((o) => o.value === xAxisDataType)?.elementSize ?? 2
   const yAxisElementSize = DATA_ORGANIZATION_OPTIONS.find((o) => o.value === yAxisDataType)?.elementSize ?? 2
 
-  const dataStart = candidate.offset
-  const dataEnd = Math.min(dataStart + candidate.size, displayData.length)
+  const skipBytes = candidate.skipBytes ?? 0
+  const dataStart = candidate.offset + skipBytes
+  const dataLength = xSize * ySize * elementSize
+  const dataEnd = Math.min(dataStart + dataLength, displayData.length)
   const values: number[][] = []
   for (let y = 0; y < ySize; y++) {
     const row: number[] = []
@@ -87,11 +89,15 @@ export function getMapTableAsText(
     values.push(row)
   }
 
-  // X-axis labels
+  const firstRowIsXAxis = candidate.firstRowIsXAxis === true
+
+  // X-axis labels (when firstRowIsXAxis, first row of values is the x-axis)
   let xLabels: number[] = []
   const xAxis = candidate.xAxis
   if (xAxis?.dataSource === 'editable_numbers' && xAxis.axisValues && xAxis.axisValues.length >= xSize) {
     xLabels = xAxis.axisValues.slice(0, xSize)
+  } else if (firstRowIsXAxis && values.length > 0 && values[0].length >= xSize) {
+    xLabels = values[0].slice(0, xSize)
   } else if (xAxis?.address != null && (xAxis.dataSource === 'eprom' || !xAxis.dataSource)) {
     const factor = xAxis.factor ?? 1
     const offset = xAxis.offsetValue ?? 0
@@ -137,8 +143,11 @@ export function getMapTableAsText(
   const colWidth = 8
   const headerCells = ['', ...xLabels.map((v) => pad(fmt(v), colWidth))]
   lines.push(headerCells.join(' '))
-  for (let y = 0; y < ySize; y++) {
-    const rowCells = [pad(fmt(yLabels[y] ?? y), colWidth)]
+  const dataRowStart = firstRowIsXAxis ? 1 : 0
+  const dataRowCount = firstRowIsXAxis ? ySize - 1 : ySize
+  for (let i = 0; i < dataRowCount; i++) {
+    const y = dataRowStart + i
+    const rowCells = [pad(fmt(yLabels[y] ?? i), colWidth)]
     for (let x = 0; x < xSize; x++) {
       const val = getDataDisplayValue(values, y, x, candidate.dataOverrides)
       rowCells.push(pad(fmt(val), colWidth))

@@ -117,9 +117,11 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
     }
 
     try {
-      const { x: xSize, y: ySize } = candidate.dimensions
-      const dataStart = candidate.offset
-      const dataEnd = Math.min(dataStart + candidate.size, displayData.length)
+      const { x: xSize, y: ySize, z: zSize } = candidate.dimensions
+      const skipBytes = candidate.skipBytes ?? 0
+      const dataStart = candidate.offset + skipBytes
+      const numElements = xSize * ySize * (zSize ?? 1)
+      const dataEnd = Math.min(dataStart + numElements * elementSize, displayData.length)
       
       const values: number[][] = []
       let minValue = Infinity
@@ -909,7 +911,7 @@ export function Map3DViewer({ candidate, fileData, noCard = false }: Map3DViewer
 
   if (noCard) {
     return (
-      <div className="h-full flex flex-col p-4">
+      <div className="h-full w-full min-w-0 flex flex-col p-4">
         {headerContent}
         <div className="flex-1 overflow-hidden">
           {viewerContent}

@@ -5,6 +5,8 @@ Request payload: project_context, scanned_files, maps, user_message.
 Response: summary, issues, suggestions, ask_vehicle (optional).
 Includes additional models for persisted chat history.
 """
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
@@ -89,6 +91,10 @@ class AssistantChatRequest(BaseModel):
     all_maps_text_views: Optional[str] = Field(
         default=None,
         description="Text Viewer tables for multiple scanned maps (one block per map with offset, axes, and data). Use it when the user asks what the other scan results are or what each map relates to—infer purpose from dimensions, axis ranges, and value patterns (e.g. torque limiter, fuel map, boost limit).",
+    )
+    selected_map_for_correction: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="When the user has a map selected and may want to fix wrong analysis: { map_id, offset_hex, type, dimensions, size_bytes, data_type, file_size }. Use this to suggest MAP_FIX with new type, dimensions, and optionally offset_hex or skip_bytes.",
     )
 
 

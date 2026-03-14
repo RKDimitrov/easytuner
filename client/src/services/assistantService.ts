@@ -60,6 +60,17 @@ export interface MapEntryPayload {
   annotations_count?: number
 }
 
+/** Selected map context for AI-assisted correction (type, dimensions, offset). */
+export interface SelectedMapForCorrectionPayload {
+  map_id: string
+  offset_hex: string
+  type: string
+  dimensions: Record<string, number>
+  size_bytes: number
+  data_type: string
+  file_size: number
+}
+
 export interface AssistantChatRequestPayload {
   project_context: ProjectContextPayload
   scanned_files: ScannedFileEntryPayload[]
@@ -69,6 +80,8 @@ export interface AssistantChatRequestPayload {
   selected_map_text_view?: string | null
   /** Text Viewer tables for all scanned maps (so the AI can say what each result relates to—e.g. torque limiter, fuel map, boost). Capped in size for token limits. */
   all_maps_text_views?: string | null
+  /** When user has a map selected: allows AI to suggest MAP_FIX (type, dimensions, offset_hex or skip_bytes). */
+  selected_map_for_correction?: SelectedMapForCorrectionPayload | null
 }
 
 export interface AssistantChatResponsePayload {

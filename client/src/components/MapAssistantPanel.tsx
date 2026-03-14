@@ -6,7 +6,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
-import { X, Send, Loader2, AlertCircle } from 'lucide-react'
+import { X, Send, Loader2, AlertCircle, Save } from 'lucide-react'
 import { cn } from '../lib/utils'
 import {
   Dialog,
@@ -59,6 +59,10 @@ export interface MapAssistantPanelProps {
   initialMessages?: AssistantMessage[]
   /** Optional: clear persisted chat on the server */
   onClearChat?: () => Promise<void>
+  /** Optional: save the current map fix to My Maps so it persists after refresh. When provided, a "Keep fix" button is shown. */
+  onKeepFix?: () => void | Promise<void>
+  /** When true, the Keep fix button shows a loading state */
+  savingKeepFix?: boolean
 }
 
 export function MapAssistantPanel({
@@ -71,6 +75,8 @@ export function MapAssistantPanel({
   onOpenMap,
   initialMessages,
   onClearChat,
+  onKeepFix,
+  savingKeepFix = false,
 }: MapAssistantPanelProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -245,6 +251,29 @@ export function MapAssistantPanel({
             </div>
           )}
         </div>
+        {onKeepFix && (
+          <div className="shrink-0 flex items-center justify-end border-t border-border px-3 py-2 bg-muted/30">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onKeepFix()}
+              disabled={savingKeepFix}
+              title="Save the current map (including any AI fix) to My Maps so it persists after refresh"
+            >
+              {savingKeepFix ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-1.5" />
+                  Keep fix
+                </>
+              )}
+            </Button>
+          </div>
+        )}
         <div className="shrink-0 border-t border-border p-3">
           <div className="flex gap-2">
             <Textarea
@@ -447,6 +476,29 @@ export function MapAssistantPanel({
             )}
           </div>
 
+          {onKeepFix && (
+            <div className="shrink-0 flex items-center justify-end border-t border-border px-3 py-2 bg-muted/30">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onKeepFix()}
+                disabled={savingKeepFix}
+                title="Save the current map (including any AI fix) to My Maps so it persists after refresh"
+              >
+                {savingKeepFix ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    Saving…
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-1.5" />
+                    Keep fix
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
           {/* Input */}
           <div className="shrink-0 border-t border-border p-3">
             <div className="flex gap-2">

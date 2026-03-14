@@ -47,6 +47,7 @@ import {
   List,
   MessageCircle,
   Sparkles,
+  Wrench,
 } from 'lucide-react'
 
 export function Analysis() {
@@ -138,6 +139,10 @@ export function Analysis() {
   /** null = create new; otherwise edit this map (user or analysis) */
   const [mapPropsTarget, setMapPropsTarget] = useState<MapCandidate | null | 'new'>(null)
   const [isIdentifyingMaps, setIsIdentifyingMaps] = useState(false)
+  const [isFixingMap, setIsFixingMap] = useState(false)
+  const [savingKeepFix, setSavingKeepFix] = useState(false)
+  /** True when the AI applied a MAP_FIX to the selected map and user hasn't saved yet (show "Keep fix" only then) */
+  const [hasUnsavedFix, setHasUnsavedFix] = useState(false)
 
   // Block navigation during scan using beforeunload and history blocking
   useEffect(() => {
@@ -749,9 +754,85 @@ export function Analysis() {
       userMessage,
       selectedMapTextView: selectedMapTextView ?? undefined,
       allMapsTextViews: allMapsTextViews ?? undefined,
+      selectedMapForCorrection: selectedCandidate ?? undefined,
     })
     const res = await assistantChat(payload)
     return res
+  }
+
+  /** Parse a single suggestion line for MAP_FIX: type=1D dimensions=19,1 [offset_hex=0xXXX | skip_bytes=N] */
+  const parseMapFix = (line: string): { type: '1D' | '2D' | '3D'; dimensions: { x: number; y: number; z?: number }; offset_hex?: string; skip_bytes?: number } | null => {
+    const trimmed = line.trim()
+    if (!trimmed.toUpperCase().startsWith('MAP_FIX:')) return null
+    const rest = trimmed.slice(8).trim()
+    const typeMatch = rest.match(/type=(\w+)/i)
+    const dimMatch = rest.match(/dimensions=([\d,]+)/)
+    if (!typeMatch || !dimMatch) return null
+    const typeStr = typeMatch[1].toUpperCase()
+    const type: '1D' | '2D' | '3D' = typeStr === '1D' ? '1D' : typeStr === '3D' ? '3D' : '2D'
+    const parts = dimMatch[1].split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
+    if (parts.length < 2) return null
+    const dimensions: { x: number; y: number; z?: number } = { x: parts[0], y: parts[1] }
+    if (parts.length >= 3) dimensions.z = parts[2]
+    const offsetMatch = rest.match(/offset_hex=(0x[\da-fA-F]+)/)
+    const skipMatch = rest.match(/skip_bytes=(\d+)/)
+    return {
+      type,
+      dimensions,
+      offset_hex: offsetMatch ? offsetMatch[1] : undefined,
+      skip_bytes: skipMatch ? parseInt(skipMatch[1], 10) : undefined,
+    }
+  }
+
+  const applyMapFix = (
+    cand: MapCandidate,
+    fix: { type: '1D' | '2D' | '3D'; dimensions: { x: number; y: number; z?: number }; offset_hex?: string; skip_bytes?: number },
+    displayData: Uint8Array | null
+  ) => {
+    const elementSize = cand.elementSize ?? 2
+    const { x, y, z } = fix.dimensions
+    const numElements = x * y * (z ?? 1)
+    const newSize = numElements * elementSize
+    const skipBytes = fix.skip_bytes ?? cand.skipBytes ?? 0
+    const dataStart = fix.offset_hex != null ? parseInt(fix.offset_hex, 16) : cand.offset + skipBytes
+    if (!Number.isFinite(dataStart)) return
+
+    const updates: Partial<MapCandidate> = {
+      type: fix.type,
+      dimensions: { x, y, ...(z != null && { z }) },
+      size: newSize,
+      xAxis: undefined,
+      yAxis: undefined,
+      dataOverrides: undefined,
+      firstRowIsXAxis: undefined,
+    }
+    if (fix.offset_hex != null) {
+      const parsed = parseInt(fix.offset_hex, 16)
+      if (!isNaN(parsed)) updates.offset = parsed
+    } else if (fix.skip_bytes != null) {
+      updates.skipBytes = fix.skip_bytes
+    }
+
+    // For 2D: use first row as x-axis (RPM/breakpoints), editable; trim is done by suggesting correct dimensions (e.g. 6×6 so last row is not read)
+    if (fix.type === '2D' && displayData && x > 0 && y > 0) {
+      const firstRow: number[] = []
+      for (let i = 0; i < x; i++) {
+        const off = dataStart + i * elementSize
+        if (off + elementSize <= displayData.length) {
+          const view = new DataView(displayData.buffer, displayData.byteOffset + off, elementSize)
+          firstRow.push(elementSize >= 2 ? view.getUint16(0, true) : view.getUint8(0))
+        } else {
+          firstRow.push(0)
+        }
+      }
+      updates.xAxis = { dataSource: 'editable_numbers' as const, axisValues: firstRow }
+      updates.firstRowIsXAxis = true
+    }
+
+    updateCandidate(cand.id, updates)
+    if (userMaps.some((m) => m.id === cand.id)) {
+      updateUserMap(cand.id, { ...cand, ...updates })
+    }
   }
 
   const handleAssistantSend = async (userMessage: string) => {
@@ -768,6 +849,21 @@ export function Analysis() {
         ask_vehicle: res.ask_vehicle ?? null,
       },
     ])
+    // If the AI suggested a MAP_FIX and we have a selected map, apply it
+    if (selectedCandidate && res.suggestions?.length) {
+      const displayData = modifiedFileData ?? fileData ?? null
+      for (const line of res.suggestions) {
+        const fix = parseMapFix(line)
+        if (fix) {
+          applyMapFix(selectedCandidate, fix, displayData)
+          setHasUnsavedFix(true)
+          toast.success('Map corrected', {
+            description: `Applied: ${fix.type} ${fix.dimensions.x}×${fix.dimensions.y}${fix.dimensions.z != null ? `×${fix.dimensions.z}` : ''}${fix.offset_hex != null ? ` at ${fix.offset_hex}` : fix.skip_bytes != null ? ` (skip ${fix.skip_bytes} bytes)` : ''}`,
+          })
+          break
+        }
+      }
+    }
     return res
   }
 
@@ -791,6 +887,76 @@ export function Analysis() {
       navigate(`/projects/${currentProject.project_id}`)
     }
   }
+
+  /** Save the currently selected map (including any AI-applied fix) to My Maps so it persists after refresh. */
+  const handleKeepFix = async () => {
+    if (!selectedCandidate || !fileId || savingKeepFix) return
+    setSavingKeepFix(true)
+    try {
+      const saved = await saveUserMapForFile(fileId, selectedCandidate)
+      if (userMaps.some((m) => m.id === selectedCandidate.id)) {
+        updateUserMap(selectedCandidate.id, saved)
+      } else {
+        addUserMap(saved)
+        setSelectedCandidate(saved)
+      }
+      setHasUnsavedFix(false)
+      toast.success('Fix saved to My Maps', {
+        description: 'The map will persist after refresh. Find it in the My Maps section.',
+      })
+    } catch (error) {
+      console.error('Failed to save map to My Maps', error)
+      toast.error('Failed to save', {
+        description: error instanceof Error ? error.message : 'Could not save the map. Try again.',
+      })
+    } finally {
+      setSavingKeepFix(false)
+    }
+  }
+
+  /** One-click: ask AI to analyze the selected map and fix type/dimensions/start if wrong. */
+  const handleFixMap = async () => {
+    if (!selectedCandidate || !fileId || isFixingMap) return
+    setAssistantOpen(true)
+    setIsFixingMap(true)
+    try {
+      const prompt =
+        'Look at the selected map numbers in selected_map_text_view (and selected_map_for_correction). From the actual values, figure out which numbers are axis breakpoints (e.g. RPM: 1000, 1250, 1500, 2250, 2500…) and which are the real map data (e.g. torque limits—often different range or pattern). Not every map is the same: infer from the data. If the current "data" row still looks like axis values (e.g. 2250, 2500, 2750…), the dimensions are wrong—suggest larger num_columns so row 0 holds the full axis and only real values appear in row 1+. Suggest MAP_FIX only if needed; if axis and values are already correct, say so and do not add MAP_FIX.'
+      const res = await sendAssistantMessageCore(prompt)
+      setAssistantMessages((prev) => [
+        ...prev,
+        { role: 'user', userText: prompt },
+        {
+          role: 'assistant',
+          summary: res.summary,
+          issues: res.issues,
+          suggestions: res.suggestions,
+          ask_vehicle: res.ask_vehicle ?? null,
+        },
+      ])
+      if (selectedCandidate && res.suggestions?.length) {
+        const displayData = modifiedFileData ?? fileData ?? null
+        for (const line of res.suggestions) {
+          const fix = parseMapFix(line)
+          if (fix) {
+            applyMapFix(selectedCandidate, fix, displayData)
+            setHasUnsavedFix(true)
+            toast.success('Map corrected', {
+              description: `Applied: ${fix.type} ${fix.dimensions.x}×${fix.dimensions.y}${fix.dimensions.z != null ? `×${fix.dimensions.z}` : ''}${fix.offset_hex != null ? ` at ${fix.offset_hex}` : fix.skip_bytes != null ? ` (skip ${fix.skip_bytes} bytes)` : ''}`,
+            })
+            break
+          }
+        }
+      }
+    } finally {
+      setIsFixingMap(false)
+    }
+  }
+
+  // Hide "Keep fix" when user selects a different map
+  useEffect(() => {
+    setHasUnsavedFix(false)
+  }, [selectedCandidate?.id])
 
   const handleIdentifyMaps = async () => {
     if (!scanComplete || !fileId || isIdentifyingMaps) return
@@ -848,7 +1014,7 @@ export function Analysis() {
               ? { ...existingUserMap, name: item.name }
               : {
                   ...cand,
-                  id: existingUserMap?.id ?? '',
+                  id: cand.id,
                   name: item.name,
                   confidence: cand.confidence,
                 }
@@ -1040,6 +1206,29 @@ export function Analysis() {
 
               <Button
                 variant="outline"
+                size={isMobile ? 'sm' : 'default'}
+                onClick={handleFixMap}
+                disabled={!selectedCandidate || !fileId || isFixingMap}
+                title="Ask AI to analyze the selected map and fix type, dimensions, or start if wrong"
+                className="flex-1 md:flex-initial"
+              >
+                {isFixingMap ? (
+                  <>
+                    <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
+                    <span className="hidden md:inline">Fixing…</span>
+                    <span className="md:hidden">Fix</span>
+                  </>
+                ) : (
+                  <>
+                    <Wrench className="w-4 h-4 md:mr-2" />
+                    <span className="hidden md:inline">Fix map</span>
+                    <span className="md:hidden">Fix</span>
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
                 size={isMobile ? "sm" : "default"}
                 onClick={() => {
                   setMapPropsTarget('new')
@@ -1076,13 +1265,77 @@ export function Analysis() {
         )}
       >
         <div className="flex flex-col lg:flex-row gap-6 items-stretch">
-          {/* Left column: 50% when closed (matches buttons), animates to 360px when assistant opens */}
+          {/* Left column: My Maps section on top, then Analysis Results (scrollable). No overlap with Checksum below. */}
           <div
             className={cn(
-              'flex flex-col gap-6 min-h-[400px] lg:h-[calc(100vh-200px)] flex-shrink-0 transition-[width] duration-300 ease-out',
-              assistantOpen ? 'lg:w-[360px]' : 'lg:w-1/2'
+              'flex flex-col min-h-[400px] lg:max-h-[calc(100vh-200px)] lg:h-[calc(100vh-200px)] flex-shrink-0 transition-[width] duration-300 ease-out overflow-hidden',
+              assistantOpen ? 'lg:w-[420px]' : 'lg:w-1/2'
             )}
           >
+            {/* Section: My Maps (user-created) – capped height, scrollable, so Analysis Results stays visible */}
+            {userMaps.length > 0 && (
+              <section className="shrink-0 border-b border-border pb-4 max-h-[min(280px,40vh)] flex flex-col min-h-0">
+                <Card className="overflow-hidden flex-1 min-h-0 flex flex-col">
+                  <CardHeader className="pb-3 shrink-0">
+                    <CardTitle className="text-lg">My Maps</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      User-created and AI-edited maps. Click to view; double-click to configure.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="p-0 flex-1 min-h-0 overflow-hidden flex flex-col">
+                    <div className="border-t border-border flex-1 min-h-0 overflow-hidden flex flex-col">
+                      <div className="grid grid-cols-[minmax(120px,1.4fr)_80px_80px_80px_90px] gap-3 px-4 py-2 text-xs font-semibold text-muted-foreground bg-muted/50 shrink-0">
+                        <div>Name</div>
+                        <div>Type</div>
+                        <div>Offset</div>
+                        <div>Size</div>
+                        <div>Dim.</div>
+                      </div>
+                      <div className="overflow-auto min-h-0 flex-1">
+                      {userMaps.map((map) => {
+                        const isSelected = selectedCandidate?.id === map.id
+                        return (
+                          <div
+                            key={map.id}
+                            className={`grid grid-cols-[minmax(120px,1.4fr)_80px_80px_80px_90px] gap-3 px-4 py-3 border-t border-border cursor-pointer hover:bg-accent/50 transition-colors ${
+                              isSelected ? 'bg-primary/20 hover:bg-primary/30' : ''
+                            }`}
+                            onClick={() => setSelectedCandidate(map)}
+                            onDoubleClick={(e) => {
+                              e.preventDefault()
+                              setMapPropsTarget(map)
+                              setShowMapPropsDialog(true)
+                            }}
+                          >
+                            <div className="min-w-0 font-medium line-clamp-2 break-words">
+                              {map.name || map.description || 'Unnamed map'}
+                            </div>
+                            <div className="shrink-0">
+                              <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-primary/20 text-primary">
+                                {map.type === 'single' ? 'Single' : map.type}
+                              </span>
+                            </div>
+                            <div className="font-mono text-sm text-muted-foreground shrink-0">
+                              {formatHexOffset(map.offset)}
+                            </div>
+                            <div className="font-mono text-sm text-muted-foreground shrink-0">
+                              {map.size} B
+                            </div>
+                            <div className="text-sm text-muted-foreground shrink-0">
+                              {map.dimensions
+                                ? `${map.dimensions.x}×${map.dimensions.y ?? 0}`
+                                : '–'}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+            )}
+            {/* Scan state or placeholder */}
             {isScanning ? (
               <Card className="shrink-0">
                 <CardContent className="pt-6 pb-6">
@@ -1164,65 +1417,9 @@ export function Analysis() {
                 </CardContent>
               </Card>
             ) : null}
-            {userMaps.length > 0 && (
-                <Card className="overflow-hidden shrink-0">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">My Maps</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Click a map to view; double-click to configure.
-                    </p>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="border-t border-border">
-                      <div className="grid grid-cols-[minmax(0,1fr)_80px_100px_100px_100px] gap-4 px-4 py-2 text-xs font-semibold text-muted-foreground bg-muted/50">
-                        <div>Name</div>
-                        <div>Type</div>
-                        <div>Offset</div>
-                        <div>Size</div>
-                        <div>Dimensions</div>
-                      </div>
-                      {userMaps.map((map) => {
-                        const isSelected = selectedCandidate?.id === map.id
-                        return (
-                          <div
-                            key={map.id}
-                            className={`grid grid-cols-[minmax(0,1fr)_80px_100px_100px_100px] gap-4 px-4 py-3 border-t border-border cursor-pointer hover:bg-accent/50 transition-colors ${
-                              isSelected ? 'bg-primary/20 hover:bg-primary/30' : ''
-                            }`}
-                            onClick={() => setSelectedCandidate(map)}
-                            onDoubleClick={(e) => {
-                              e.preventDefault()
-                              setMapPropsTarget(map)
-                              setShowMapPropsDialog(true)
-                            }}
-                          >
-                            <div className="min-w-0 truncate font-medium">
-                              {map.name || map.description || 'Unnamed map'}
-                            </div>
-                            <div>
-                              <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-primary/20 text-primary">
-                                {map.type === 'single' ? 'Single' : map.type}
-                              </span>
-                            </div>
-                            <div className="font-mono text-sm text-muted-foreground">
-                              {formatHexOffset(map.offset)}
-                            </div>
-                            <div className="font-mono text-sm text-muted-foreground">
-                              {map.size} B
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {map.dimensions
-                                ? `${map.dimensions.x}×${map.dimensions.y ?? 0}`
-                                : '–'}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              <div className="flex-1 min-h-0">
+            {/* Section: Analysis Results – limited height, scrollable, below My Maps */}
+            <section className="flex-1 min-h-0 flex flex-col overflow-hidden pt-4">
+              <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
                 <ResultsTable
                   onConfigureCandidate={(c) => {
                     setMapPropsTarget(c)
@@ -1230,10 +1427,11 @@ export function Analysis() {
                   }}
                 />
               </div>
-            </div>
+            </section>
+          </div>
 
-          {/* Middle column: Hex / Text / 3D viewer – takes remaining space (not squished) */}
-          <Card className="flex-1 min-w-0 min-h-[400px] lg:h-[calc(100vh-200px)] flex flex-col">
+          {/* Middle column: Hex / Text / 3D viewer – max-width to avoid unused horizontal space */}
+          <Card className="flex-1 min-w-0 min-h-[400px] lg:h-[calc(100vh-200px)] lg:max-w-4xl flex flex-col">
               <CardContent className="flex-1 overflow-hidden p-0">
                 <Tabs 
                   value={viewMode} 
@@ -1274,15 +1472,15 @@ export function Analysis() {
                     </TabsList>
                   </div>
                   
-                  <TabsContent value="hex" className="flex-1 overflow-hidden m-0 mt-0">
-                    <div className="h-full p-4">
+                  <TabsContent value="hex" className="flex-1 overflow-hidden m-0 mt-0 min-w-0">
+                    <div className="h-full w-full min-w-0 p-4 flex flex-col">
                       <HexViewer noCard />
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="text" className="flex-1 overflow-hidden m-0 mt-0">
+                  <TabsContent value="text" className="flex-1 overflow-hidden m-0 mt-0 min-w-0">
                     {selectedCandidate && fileData ? (
-                      <div className="h-full">
+                      <div className="h-full w-full min-w-0">
                         <MapTextViewer
                           candidate={selectedCandidate}
                           fileData={fileData}
@@ -1330,9 +1528,9 @@ export function Analysis() {
                     )}
                   </TabsContent>
                   
-                  <TabsContent value="3d" className="flex-1 overflow-hidden m-0 mt-0">
+                  <TabsContent value="3d" className="flex-1 overflow-hidden m-0 mt-0 min-w-0">
                     {selectedCandidate && fileData ? (
-                      <div className="h-full">
+                      <div className="h-full w-full min-w-0">
                         <Map3DViewer candidate={selectedCandidate} fileData={fileData} noCard />
                       </div>
                     ) : (
@@ -1378,6 +1576,19 @@ export function Analysis() {
                 onOpenMap={handleOpenMapFromAssistant}
                 initialMessages={assistantMessages}
                 onClearChat={fileId ? handleClearAssistantChat : undefined}
+                onKeepFix={
+                  selectedCandidate &&
+                  fileId &&
+                  (hasUnsavedFix ||
+                    !!(
+                      selectedCandidate.firstRowIsXAxis ||
+                      (selectedCandidate.skipBytes != null && selectedCandidate.skipBytes > 0) ||
+                      !userMaps.some((m) => m.id === selectedCandidate.id)
+                    ))
+                    ? handleKeepFix
+                    : undefined
+                }
+                savingKeepFix={savingKeepFix}
               />
             </div>
           </div>

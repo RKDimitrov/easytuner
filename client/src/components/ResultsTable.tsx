@@ -15,6 +15,7 @@ interface ResultsTableProps {
 
 export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
   const candidates = useAnalysisStore((state) => state.candidates)
+  const userMaps = useAnalysisStore((state) => state.userMaps)
   const selectedCandidate = useAnalysisStore((state) => state.selectedCandidate)
   const setSelectedCandidate = useAnalysisStore((state) => state.setSelectedCandidate)
 
@@ -24,15 +25,21 @@ export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
 
   const parentRef = useRef<HTMLDivElement>(null)
 
-  // Filter candidates
+  // Analysis Results = algorithm output only (exclude maps that are in My Maps)
+  const analysisOnlyCandidates = useMemo(
+    () => candidates.filter((c) => !userMaps.some((m) => m.id === c.id)),
+    [candidates, userMaps]
+  )
+
+  // Filter by type and confidence
   const filteredCandidates = useMemo(() => {
-    return candidates.filter(
+    return analysisOnlyCandidates.filter(
       (candidate) =>
         typeFilter.has(candidate.type) &&
         candidate.confidence >= confidenceRange[0] &&
         candidate.confidence <= confidenceRange[1]
     )
-  }, [candidates, typeFilter, confidenceRange])
+  }, [analysisOnlyCandidates, typeFilter, confidenceRange])
 
   // Virtualizer for table rows
   const rowVirtualizer = useVirtualizer({
@@ -69,17 +76,23 @@ export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">
-            Analysis Results
-            <span className="text-sm text-muted-foreground ml-2 font-normal">
-              ({filteredCandidates.length} of {candidates.length})
-            </span>
-          </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-lg">
+              Analysis Results
+              <span className="text-sm text-muted-foreground ml-2 font-normal">
+                ({filteredCandidates.length} of {analysisOnlyCandidates.length})
+              </span>
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              From the scan algorithm (maps in My Maps are not listed here).
+            </p>
+          </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
+            className="shrink-0"
           >
             <Filter className="h-4 w-4" />
           </Button>
@@ -133,15 +146,15 @@ export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
         )}
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-hidden p-0">
+      <CardContent className="flex-1 min-h-0 overflow-hidden p-0 flex flex-col">
         {filteredCandidates.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
+          <div className="flex items-center justify-center flex-1 text-muted-foreground">
             No candidates match the current filters
           </div>
         ) : (
           <div
             ref={parentRef}
-            className="h-full overflow-auto min-h-[60vh]"
+            className="flex-1 min-h-0 overflow-auto"
             style={{ contain: 'strict' }}
           >
             <div
@@ -153,12 +166,12 @@ export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
             >
               {/* Table header */}
               <div className="sticky top-0 z-10 bg-card border-b border-border">
-                <div className="grid grid-cols-[80px_100px_120px_1fr_100px_auto] gap-4 px-4 py-2 text-xs font-semibold text-muted-foreground">
+                <div className="grid grid-cols-[80px_minmax(160px,1.4fr)_90px_1fr_90px_auto] gap-3 px-4 py-2 text-xs font-semibold text-muted-foreground">
                   <div>Type</div>
-                  <div>Offset</div>
+                  <div>Name / Offset</div>
                   <div>Size</div>
                   <div>Confidence</div>
-                  <div>Dimensions</div>
+                  <div>Dim.</div>
                   {onConfigureCandidate ? <div className="w-9" /> : null}
                 </div>
               </div>
@@ -181,7 +194,7 @@ export function ResultsTable({ onConfigureCandidate }: ResultsTableProps) {
                     }}
                   >
 <div
-                    className={`grid grid-cols-[80px_100px_120px_1fr_100px_auto] gap-4 px-4 py-3 border-b border-border cursor-pointer hover:bg-accent/50 transition-colors ${
+                    className={`grid grid-cols-[80px_minmax(160px,1.4fr)_90px_1fr_90px_auto] gap-3 px-4 py-3 border-b border-border cursor-pointer hover:bg-accent/50 transition-colors ${
                         isSelected ? 'bg-primary/20 hover:bg-primary/30' : ''
                       }`}
                       onClick={() => handleRowClick(candidate)}

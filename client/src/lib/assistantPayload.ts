@@ -31,6 +31,8 @@ export interface BuildPayloadInput {
   selectedMapTextView?: string | null
   /** Text Viewer tables for multiple scanned maps (so the AI can identify what each map relates to). Built from getMapTableAsText for each candidate; capped by caller. */
   allMapsTextViews?: string | null
+  /** When set, sent so the AI can suggest MAP_FIX (correct type, dimensions, offset or skip_bytes). */
+  selectedMapForCorrection?: MapCandidate | null
 }
 
 /**
@@ -82,6 +84,7 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
     userMessage,
     selectedMapTextView,
     allMapsTextViews,
+    selectedMapForCorrection,
   } = input
 
   // Only include files in scanned_files when a scan has actually been run (scanId present).
@@ -132,6 +135,18 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
   }
   if (allMapsTextViews != null && allMapsTextViews !== '') {
     payload.all_maps_text_views = allMapsTextViews
+  }
+  if (selectedMapForCorrection != null && fileSize > 0) {
+    const dims = selectedMapForCorrection.dimensions || {}
+    payload.selected_map_for_correction = {
+      map_id: selectedMapForCorrection.id,
+      offset_hex: formatHexOffset(selectedMapForCorrection.offset),
+      type: selectedMapForCorrection.type,
+      dimensions: { x: dims.x ?? 1, y: dims.y ?? 1, ...(dims.z != null && { z: dims.z }) },
+      size_bytes: selectedMapForCorrection.size,
+      data_type: selectedMapForCorrection.dataType || 'u16le',
+      file_size: fileSize,
+    }
   }
   return payload
 }
