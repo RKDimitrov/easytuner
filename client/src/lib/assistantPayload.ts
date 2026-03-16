@@ -137,7 +137,8 @@ export function buildAssistantPayload(input: BuildPayloadInput): AssistantChatRe
     payload.all_maps_text_views = allMapsTextViews
   }
   if (selectedMapForCorrection != null && fileSize > 0) {
-    const dims = selectedMapForCorrection.dimensions || {}
+    const dims: { x?: number; y?: number; z?: number } =
+      selectedMapForCorrection.dimensions || {}
     payload.selected_map_for_correction = {
       map_id: selectedMapForCorrection.id,
       offset_hex: formatHexOffset(selectedMapForCorrection.offset),
